@@ -1,0 +1,170 @@
+﻿<div class="card">
+<h3>PARTIDA ONLINE</h3>
+<div class="rules">Servidor: <b>GameHub Durable Object</b><br>Matchmaking por WebSocket <code>/ws</code><br>Funciona con 2 pestañas.</div>
+</div>
+</aside>
+</div>
+<div id="overlay"><div class="modal"><h2 id="resultTitle">Fin</h2><p id="resultText"></p><br><button id="again" class="primary" style="width:100%;height:46px">Jugar otra vez</button><button onclick="location.href='index.html'" style="width:100%;margin-top:8px">Menú</button></div></div>
+<div id="pause-overlay"><div class="modal"><h2>EN PAUSA</h2><br><button id="pause-continue" class="primary" style="width:100%;height:46px">▶ CONTINUAR</button><br><br><button id="pause-controls" style="width:100%;height:44px;margin-bottom:10px">🎮 CONTROLES</button><button id="pause-to-menu" style="width:100%">⌂ MENU PRINCIPAL</button></div></div>
+<div id="controls-overlay"><div class="modal"><h2>CONTROLES</h2><br><div style="text-align:left;font-size:13px;line-height:1.7;color:var(--muted)"><b style="color:var(--text)">TECLADO</b><br>← → : mover cubo<br>↓ : acelerar caída<br>ESPACIO : fijar pieza<br>P : pausar<br><br><b style="color:var(--text)">TÁCTIL</b><br>Toca columna para mover<br>Botones ← ↓ →<br><br><b style="color:var(--text)">ONLINE</b><br>El servidor valida todo.<br>Tu rival ve tu movimiento en tiempo real.</div><br><button id="controls-close" class="primary" style="width:100%;height:44px">VOLVER</button></div></div>
+<div id="reglas-modal"><div class="modal"><button id="cerrar-reglas" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--gold);font-size:22px;cursor:pointer">✕</button><h3 style="color:var(--gold);margin-bottom:12px">REGLAS DE VICTORIA</h3><div style="text-align:left;font-size:13px;line-height:1.6;color:var(--muted)"><p><b style="color:var(--text)">Dados:</b> ambos tiran, el más alto empieza. Empate = repetir.</p><p><b style="color:var(--text)">Colocación inicial:</b> cada jugador elige columna distinta.</p><p><b style="color:var(--text)">20 capturas:</b> victoria inmediata.</p><p><b style="color:var(--text)">10 minutos:</b> gana quien tenga más capturas.</p><p><b style="color:var(--text)">Empate:</b> muerte súbita, siguiente captura decide.</p><p><b style="color:var(--text)">Gravedad:</b> grupos sin libertades desaparecen y el resto cae.</p></div><br><button id="cerrar-reglas2" class="primary" style="width:100%">ENTENDIDO</button></div></div>
+<script>
+"use strict";
+const W=8,H=12,BLUE=1,RED=2;
+const $=id=>document.getElementById(id);
+let socket=null;let ownColor=0;let board=Array.from({length:H},()=>Array(W).fill(0));let piece=null;let remotePiece=null;let currentPlayer=0;let scores=[0,0,0];let gameStarted=false;let gameOver=false;let searching=false;let connecting=false;let phase="idle";let diceRolls={[BLUE]:null,[RED]:null};let diceRound=1;let setupPlaced={[BLUE]:false,[RED]:false};let setupPlayer=null;let serverRemaining=600;let stateReceivedAt=Date.now();let suddenDeath=false;let lastMessage="Pulsa Buscar rival para encontrar una partida.";let downInputActive=false;let downHoldActive=false;let downHoldTimer=null;let paused=false;
+function say(m){if(!m)return;lastMessage=m;$("status").textContent=m}
+function colorName(p){return p===BLUE?"Azul":"Rojo"}
+function other(p){return p===BLUE?RED:BLUE}
+function updateClock(){const elapsed=phase==="playing"?(Date.now()-stateReceivedAt)/1000:0;const n=Math.max(0,Math.ceil(serverRemaining-elapsed));$("time").textContent=String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0");$("clock").classList.toggle("urgent",n<=60&&phase==="playing")}
+function sendMessage(d){if(!socket||socket.readyState!==WebSocket.OPEN){say("No hay conexion con el servidor.");return false}socket.send(JSON.stringify(d));return true}
+function canControl(){return gameStarted&&!gameOver&&phase==="playing"&&currentPlayer===ownColor&&!!piece&&socket&&socket.readyState===WebSocket.OPEN&&!paused}
+function sendControl(a){if(!canControl())return;sendMessage({type:"control",action:a})}
+function movePiece(dx){if(!canControl())return;try{SFX.move()}catch{};sendControl(dx<0?"left":"right")}
+function chooseColumn(x){if(!gameStarted||gameOver||phase!=="setup")return;if(setupPlayer!==ownColor||setupPlaced[ownColor]){try{SFX.error()}catch{};say("Espera a que te toque elegir.");return}try{SFX.confirm()}catch{};sendMessage({type:"choose_column",x})}
+let boardCells=[];
+function ensureBoardCells(){
+ const el=$("board");
+ if(boardCells.length===W*H) return;
+ el.replaceChildren();
+ boardCells=[];
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const cell=document.createElement("div");
+  cell.dataset.x=x;cell.dataset.y=y;
+  cell.addEventListener("click",()=>{
+   const cx=parseInt(cell.dataset.x);
+   if(phase==="setup"){chooseColumn(cx);return}
+   if(canControl()&&piece&&cx!==piece.x)movePiece(Math.sign(cx-piece.x));
+  });
+  el.appendChild(cell);
+  boardCells.push(cell);
+ }
+}
+function render(){
+ ensureBoardCells();
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const idx=y*W+x;
+  const cell=boardCells[idx];
+  let cls="cell"+(board[y][x]===BLUE?" blue":board[y][x]===RED?" red":"");
+  if(piece&&piece.x===x&&piece.y===y)cls+=" falling";
+  if(remotePiece&&remotePiece.x===x&&remotePiece.y===y)cls+=" remote-falling "+(remotePiece.color===BLUE?"blue":"red");
+  if(phase==="setup"&&setupPlayer===ownColor&&!setupPlaced[ownColor]&&y===H-1&&board[y][x]===0)cls+=" selectable";
+  cell.className=cls;
+ }
+ $("scoreBlue").textContent=scores[BLUE]||0;
+ $("scoreRed").textContent=scores[RED]||0;
+ $("pBlue").classList.toggle("active",!gameOver&&currentPlayer===BLUE);
+ $("pRed").classList.toggle("active",!gameOver&&currentPlayer===RED);
+ $("find").disabled=searching||connecting||gameStarted;
+ $("cancel").disabled=!searching;
+ $("rollDice").hidden=!(gameStarted&&phase==="dice"&&diceRolls[ownColor]===null&&!gameOver);
+ $("rollDice").disabled=!socket||socket.readyState!==WebSocket.OPEN;
+ $("rollDice").textContent=diceRound>1?"Volver a tirar":"Tirar los dados";
+ $("surrender").hidden=!gameStarted||gameOver||phase==="over";
+ $("left").disabled=!canControl();
+ $("right").disabled=!canControl();
+ $("down").disabled=!canControl();
+ if(phase==="setup"&&setupPlayer===ownColor&&!setupPlaced[ownColor]){$("prep-panel").style.display="block"}else{$("prep-panel").style.display="none"}
+ updateClock();
+}
+let prevScores=[0,0,0];
+function handleState(data){
+ board=data.board||board;scores=data.scores||scores;currentPlayer=data.player||0;phase=data.phase||phase;gameOver=!!data.gameOver;suddenDeath=!!data.suddenDeath;serverRemaining=Number.isFinite(data.remaining)?data.remaining:serverRemaining;stateReceivedAt=Date.now();diceRolls=data.diceRolls||diceRolls;diceRound=data.diceRound||1;setupPlaced=data.setupPlaced||setupPlaced;setupPlayer=data.setupPlayer||null;
+ const active=data.activePiece&&Number.isInteger(data.activePiece.x)&&Number.isInteger(data.activePiece.y)?{x:data.activePiece.x,y:data.activePiece.y,color:currentPlayer}:null;
+ if(phase==="playing"&&!gameOver){
+  if(currentPlayer===ownColor){piece=active?{x:active.x,y:active.y}:null;remotePiece=null}else{piece=null;remotePiece=active}
+ }else{piece=null;remotePiece=null}
+ if(data.message)say(data.message);
+ else if(phase==="dice"){
+  const mine=diceRolls[ownColor];const theirs=diceRolls[other(ownColor)];
+  if(mine!==null&&theirs===null)say("Has sacado "+mine+". Esperando rival...");
+  else if(mine===null&&theirs!==null)say("Rival sacó "+theirs+". Te toca tirar.");
+  else say(diceRound>1?"Empate. Volved a tirar.":"Tirad los dados para decidir quien empieza.");
+ }else if(phase==="setup"){
+  if(setupPlayer===ownColor)say("Te toca elegir columna libre.");else say("Rival eligiendo columna...");
+ }else if(phase==="playing"){
+  say(currentPlayer===ownColor?(suddenDeath?"Muerte súbita: siguiente captura decide. Tu turno.":"Tu turno."): "Turno del rival...");
+ }
+ try{ const curB=scores[BLUE]||0, curR=scores[RED]||0, prevB=prevScores[BLUE]||0, prevR=prevScores[RED]||0; if(data.scores && (data.scores[BLUE]>prevB || data.scores[RED]>prevR)){ if((data.scores[BLUE]-prevB)>=2 || (data.scores[RED]-prevR)>=2) SFX.captureBig(); else SFX.capture(); } if(data.player && data.player!==currentPlayer){ if(data.player===ownColor) SFX.yourTurn(); } prevScores = data.scores ? [...data.scores] : prevScores; }catch{}
+ if(gameOver){
+  piece=null;remotePiece=null;
+  const winner=data.winner;
+  $("resultTitle").textContent=winner===0?"¡Empate!":"¡Gana "+colorName(winner)+"!";
+  $("resultText").textContent=(data.reason||"Partida finalizada")+" | Azul "+(scores[BLUE]||0)+" - Rojo "+(scores[RED]||0);
+  $("overlay").classList.add("show");
+ }else{$("overlay").classList.remove("show")}
+ render();
+}
+function resetClient(){
+ ownColor=0;board=Array.from({length:H},()=>Array(W).fill(0));piece=null;remotePiece=null;currentPlayer=0;scores=[0,0,0];gameStarted=false;gameOver=false;searching=false;connecting=false;phase="idle";diceRolls={[BLUE]:null,[RED]:null};diceRound=1;setupPlaced={[BLUE]:false,[RED]:false};setupPlayer=null;serverRemaining=600;stateReceivedAt=Date.now();suddenDeath=false;paused=false;render();
+}
+function connectAndFind(){
+ if(gameStarted||searching||connecting)return;
+ if(socket&&socket.readyState===WebSocket.OPEN){searching=true;sendMessage({type:"find"});say("Buscando rival...");render();return}
+ connecting=true;say("Conectando al servidor...");render();
+ const protocol=location.protocol==="https:"?"wss:":"ws:";
+ socket=new WebSocket(protocol+"//"+location.host+"/ws");
+ socket.addEventListener("open",()=>{connecting=false;searching=true;sendMessage({type:"find"});say("Buscando rival...");render()});
+ socket.addEventListener("message",event=>{
+  let data;try{data=JSON.parse(event.data)}catch{say("Respuesta no válida del servidor.");return}
+  if(data.type==="searching"){searching=true;say("Buscando rival. Deja esta página abierta...");try{SFX.searching()}catch{};render()}
+  else if(data.type==="match_found"){searching=false;connecting=false;ownColor=data.color;gameStarted=true;gameOver=false;phase="dice";piece=null;remotePiece=null;say("¡Rival encontrado! Preparando dados...");try{SFX.found()}catch{};render()}
+  else if(data.type==="state"){if(!gameStarted&&data.phase!=="idle")return;handleState(data)}
+  else if(data.type==="piece_motion"){
+   if(!gameStarted||gameOver||phase!=="playing")return;
+   if(!Number.isInteger(data.x)||!Number.isInteger(data.y)||data.x<0||data.x>=W||data.y<0||data.y>=H)return;
+   if(data.color===ownColor){piece={x:data.x,y:data.y};remotePiece=null}else{piece=null;remotePiece={x:data.x,y:data.y,color:data.color}}
+   render();
+  }
+  else if(data.type==="search_cancelled"){searching=false;say("Búsqueda cancelada.");render()}
+  else if(data.type==="error"){say(data.message||"Error del servidor.");render()}
+  else if(data.type==="already_matched"){say("Ya estás en una partida.")}
+  else if(data.type==="pong"){}
+ });
+ socket.addEventListener("close",()=>{
+  const wasPlaying=gameStarted;searching=false;connecting=false;gameStarted=false;gameOver=false;piece=null;remotePiece=null;phase="idle";
+  say(wasPlaying?"Conexión cerrada. Partida interrumpida.":"Conexión cerrada. Pulsa Buscar rival.");
+  render();
+ });
+ socket.addEventListener("error",()=>{connecting=false;say("No se pudo conectar. Comprueba servidor.");render()});
+}
+function cancelSearch(){if(!searching)return;sendMessage({type:"cancel_search"});searching=false;say("Cancelando búsqueda...");render()}
+function beginDownInput(){if(downInputActive||!canControl())return;downInputActive=true;downHoldActive=false;downHoldTimer=setTimeout(()=>{downHoldTimer=null;if(!downInputActive)return;downHoldActive=true;sendControl("down_start")},140)}
+function endDownInput(){if(!downInputActive)return;downInputActive=false;if(downHoldTimer!==null){clearTimeout(downHoldTimer);downHoldTimer=null}if(downHoldActive)sendControl("down_stop");else sendControl("down_step");downHoldActive=false}
+function togglePause(){if(gameOver||!gameStarted)return;paused=!paused;$("pause-overlay").classList.toggle("show",paused)}
+function showControls(){$("controls-overlay").classList.add("show")}
+function hideControls(){$("controls-overlay").classList.remove("show")}
+$("find").addEventListener("click",connectAndFind);
+$("cancel").addEventListener("click",cancelSearch);
+$("rollDice").addEventListener("click",()=>{if(!gameStarted||phase!=="dice"||diceRolls[ownColor]!==null)return;sendMessage({type:"roll_dice"});say("Has lanzado el dado...");$("rollDice").disabled=true});
+$("surrender").addEventListener("click",()=>{if(!gameStarted||gameOver)return;if(confirm("¿Seguro que quieres rendirte?")){sendMessage({type:"surrender"});say("Has solicitado rendición...");$("surrender").disabled=true}});
+$("left").addEventListener("click",()=>movePiece(-1));
+$("right").addEventListener("click",()=>movePiece(1));
+const downButton=$("down");
+downButton.addEventListener("pointerdown",e=>{e.preventDefault();if(downButton.setPointerCapture){try{downButton.setPointerCapture(e.pointerId)}catch{}}beginDownInput()});
+["pointerup","pointercancel","lostpointercapture"].forEach(n=>{downButton.addEventListener(n,endDownInput)});
+$("to-menu").addEventListener("click",()=>{window.location.href="index.html"});
+$("again").addEventListener("click",()=>{$("overlay").classList.remove("show");resetClient();connectAndFind()});
+$("btn-reglas").addEventListener("click",()=>{$("reglas-modal").classList.add("show")});
+$("cerrar-reglas").addEventListener("click",()=>{$("reglas-modal").classList.remove("show")});
+$("cerrar-reglas2").addEventListener("click",()=>{$("reglas-modal").classList.remove("show")});
+$("reglas-modal").addEventListener("click",e=>{if(e.target.id==="reglas-modal")e.target.classList.remove("show")});
+$("pause-controls").addEventListener("click",showControls);
+$("controls-close").addEventListener("click",hideControls);
+$("pause-continue").addEventListener("click",togglePause);
+$("pause-to-menu").addEventListener("click",()=>{location.href="index.html"});
+document.addEventListener("keydown",e=>{
+ if(["ArrowLeft","ArrowRight","ArrowDown"," "].includes(e.key))e.preventDefault();
+ if(e.repeat)return;
+ if(e.key==="ArrowLeft")movePiece(-1);
+ if(e.key==="ArrowRight")movePiece(1);
+ if(e.key==="ArrowDown")beginDownInput();
+ if(e.key.toLowerCase()==="p")togglePause();
+});
+document.addEventListener("keyup",e=>{if(e.key==="ArrowDown")endDownInput()});
+window.addEventListener("blur",endDownInput);
+setInterval(updateClock,250);
+setInterval(()=>{if(socket&&socket.readyState===WebSocket.OPEN)sendMessage({type:"ping"})},1500);
+render();
+</script>
+<script>

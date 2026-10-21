@@ -1,0 +1,14 @@
+﻿
+Path                                             LineNumber Line                                     
+----                                             ---------- ----                                     
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        272   async spawnServerPiece(state) {        
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        304       await this.spawnServerPiece(state);
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        338       await this.spawnServerPiece(state);
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        375       await this.spawnServerPiece(state);
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        412     const pair = new WebSocketPair();    
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        414     const server = pair[1];              
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        416     server.serializeAttachment({         
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        421     this.ctx.acceptWebSocket(server);    
+D:\PRUEBAGOTETRIX\gravity-go-online\src\index.js        697       await this.spawnServerPiece(state);
+
+

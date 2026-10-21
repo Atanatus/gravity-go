@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -190,7 +190,6 @@ function unlockAudio(){
   } else {
     audioUnlocked=true;
   }
-  // silent blip to unlock iOS
   try{
     const buf = ctx.createBuffer(1,1,22050);
     const src = ctx.createBufferSource();
@@ -204,9 +203,8 @@ function getCtxForPlay(){
   const ctx = ensureCtx();
   if(!ctx) return null;
   if(ctx.state === 'suspended'){
-    // try resume and return null for this frame, will replay after
     ctx.resume().then(()=>{ audioUnlocked=true; });
-    return null; // skip this sound, next interaction will work
+    return null;
   }
   return ctx;
 }
@@ -214,10 +212,8 @@ function tone(f,dur,vol=0.2,type='sine',f2=null){
   try{
     let ctx = getCtxForPlay();
     if(!ctx){
-      // first gesture: unlock and schedule retry of this tone
       ctx = unlockAudio();
       if(!ctx || ctx.state !== 'running'){
-        // schedule retry in 150ms
         setTimeout(()=>tone(f,dur,vol,type,f2), 160);
         return;
       }
@@ -253,7 +249,6 @@ const SFX={
   yourTurn:()=>tone(700,0.09,0.12,'sine',950),
   error:()=>tone(140,0.22,0.16,'sawtooth',80),
 };
-// Unlock on real user gestures
 ['click','touchstart','touchend','keydown'].forEach(ev=>{
   window.addEventListener(ev, ()=>{ unlockAudio(); }, {once:false, passive:true});
 });
@@ -392,8 +387,9 @@ function connectAndFind(){
  if(gameStarted||searching||connecting)return;
  if(socket&&socket.readyState===WebSocket.OPEN){searching=true;sendMessage({type:"find"});say("Buscando rival...");render();return}
  connecting=true;say("Conectando al servidor...");render();
- const protocol=location.protocol==="https:"?"wss:":"ws:";
- socket=new WebSocket(protocol+"//"+location.host+"/ws");
+ const isLocal = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+ const WS_URL = isLocal ? "ws://127.0.0.1:8787/ws" : "wss://gravity-go-cf-server.atanatus.workers.dev/ws";
+ socket=new WebSocket(WS_URL);
  socket.addEventListener("open",()=>{connecting=false;searching=true;sendMessage({type:"find"});say("Buscando rival...");render()});
  socket.addEventListener("message",event=>{
   let data;try{data=JSON.parse(event.data)}catch{say("Respuesta no válida del servidor.");return}
