@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>GRAVITY GO — ONLINE</title>
+<style>
+:root{color-scheme:dark;--bg:#090d15;--panel:#111927;--line:#29354a;--text:#f0f5ff;--muted:#9ba9bf;--gold:#ffd166}
+*{box-sizing:border-box}
+html,body{height:100%;height:100dvh;margin:0;overflow:hidden}
+body{display:flex;flex-direction:column;background:radial-gradient(ellipse at top,#17243a 0,#090d15 65%);color:var(--text);font-family:Segoe UI,Arial,sans-serif}
+button{border:1px solid #34435a;background:#1b293d;color:var(--text);border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit}
+button:hover{background:#263951}
+button:disabled{opacity:.45}
+header{position:relative;flex:0 0 auto;padding:6px 12px 4px;text-align:center}
+.logo{font-weight:900;font-size:clamp(22px,3.2vw,34px);letter-spacing:3px}
+.sub{color:var(--muted);font-size:10px;letter-spacing:2px;margin-top:1px}
+.header-actions{position:absolute;top:8px;right:12px}
+.header-actions button{height:30px;padding:4px 10px;font-size:13px}
+main{flex:1 1 0;min-height:0;display:flex;flex-direction:column;padding:6px 10px 8px;overflow:hidden}
+.topbar{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;margin-bottom:2px;flex:0 0 auto}
+.player{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 8px}
+.player.red{text-align:right}
+.player.active{border-color:var(--gold)}
+.pname{font-size:11px;letter-spacing:1px;color:var(--muted)}
+.score{font-size:clamp(20px,2.8vw,30px);font-weight:900;line-height:1}
+.target{font-size:10px;color:var(--muted)}
+.clock{background:#101827;border:1px solid var(--line);border-radius:10px;min-width:78px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 6px}
+.clock strong{font-size:clamp(18px,2.4vw,26px);font-variant-numeric:tabular-nums}
+.clock small{font-size:8px;color:var(--muted)}
+.layout{flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+.layout>div:first-child{flex:1 1 0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:6px}
+.boardwrap{grid-row:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#0d1420;border:1px solid var(--line);border-radius:12px;padding:6px}
+
+.cell{aspect-ratio:1;background:#182437;border:1px solid #29374d;border-radius:3px;position:relative}
+.cell.blue::after,.cell.red::after{content:"";position:absolute;inset:12%;border-radius:2px}
+.cell.blue::after{background:#f5f5f5}
+.cell.red::after{background:#080a0e;border:1px solid #d8dce4}
+.cell.falling{outline:2px solid #fff;outline-offset:-2px}
+.cell.prep-preview{outline:2px dashed var(--gold);outline-offset:-3px;background:rgba(255,209,102,.12)}
+#prep-panel,.card{grid-row:2;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+#prep-panel[style*="display:flex"]~.card{display:none!important}
+#prep-title{color:var(--gold);font-size:12px;margin:0 0 2px}
+#prep-help{font-size:11px;margin:0 0 4px}
+#prep-confirm{min-height:28px;padding:4px 10px}
+.card h3{font-size:10px;letter-spacing:1px;color:var(--muted);margin:0 0 3px}
+.status{font-size:12px}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px}
+.controls button{height:28px;padding:2px;font-size:14px}
+.hint{text-align:center;color:var(--muted);font-size:10px;margin:3px 0 0}
+.primary{background:#174b77;border-color:#277fbd}
+#overlay{position:fixed;inset:0;background:#050810d9;display:none;align-items:center;justify-content:center;z-index:5;padding:20px}
+#overlay.show{display:flex}
+.modal{width:min(400px,100%);background:#111927;border:1px solid #42516a;border-radius:16px;padding:24px;text-align:center}
+#pause-overlay{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;background:#050810e8;backdrop-filter:blur(4px)}
+#pause-overlay.show{display:flex}
+.pause-modal{width:min(380px,100%);padding:24px;text-align:center;background:#111927;border:1px solid #42516a;border-radius:16px}
+.pause-actions{display:grid;gap:8px;margin-top:16px}
+.pause-actions button{min-height:44px}
+#main-menu{position:fixed;inset:0;z-index:20000;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 15%,#203653 0,#0a101b 55%,#05080e 100%);padding:20px}
+#main-menu.show{display:flex}
+.menu-inner{width:min(480px,100%);text-align:center}
+.menu-brand{font-size:clamp(32px,8vw,56px);font-weight:900;letter-spacing:4px}
+.menu-brand span{color:var(--gold)}
+.menu-options{display:grid;gap:10px;margin-top:24px}
+.menu-option{display:flex;align-items:center;gap:12px;padding:14px;background:#17263a;border:1px solid #34445b;border-radius:12px;text-align:left}
+.menu-option.primary{background:#174b77;border-color:#3989bd}
+.dice-overlay{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.94);color:#fff}
+.dice-overlay.show{display:flex}
+.dice-panel{text-align:center;width:min(500px,100%)}
+.dice-face{width:90px;height:90px;border:2px solid #fff;border-radius:16px;display:grid;place-items:center;font-size:48px;font-weight:900;background:#fff;color:#000;margin:8px auto}
+
+/* FIX PANELES NO SOLAPADOS */
+.layout > div:first-child {
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+}
+#prep-panel, .card {
+  grid-row: 2 !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+#prep-panel[style*="display: flex"],
+#prep-panel[style*="display:flex"] {
+  display: flex !important;
+}
+#prep-panel[style*="display: flex"] ~ .card,
+#prep-panel[style*="display:flex"] ~ .card {
+  display: none !important;
+}
+
+/* TABLERO COMPLETO SIN CORTAR */
+.layout > div:first-child {
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) 100px !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.boardwrap {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+#board {
+  height: 100% !important;
+  width: fit-content;
+  max-height: 100% !important;
+  max-width: fit-content;
+  aspect-ratio: 8 / 12 !important;
+  margin: auto !important;
+}
+#prep-panel, .card {
+  height: 54px !important;
+  max-height: 54px !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* FORZAR TABLERO COMPLETO */
+html, body {
+  height: 100dvh !important;
+  overflow: hidden !important;
+}
+main {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.layout, .layout > div:first-child {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.boardwrap {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+#board {
+  height: 100% !important;
+  width: fit-content;
+  max-height: 100% !important;
+  aspect-ratio: 8 / 12 !important;
+  margin: auto !important;
+}
+#prep-panel, .card {
+  flex: 0 0 auto !important;
+  max-height: 54px !important;
+  overflow: hidden !important;
+}
+
+
+
+/* TAMAÑO SEGURO */
+#board {
+  display: grid !important;
+  grid-template-columns: repeat(8, 38px) !important;
+  grid-template-rows: repeat(12, 38px) !important;
+  gap: 2px !important;
+  width: fit-content !important;
+  margin: 2px auto !important;
+}
+.cell {
+  width: 38px !important;
+  height: 38px !important;
+}
+
+/* LAYOUT LATERAL */
+.layout > div:first-child {
+  display: grid !important;
+  grid-template-columns: 1fr 280px !important;
+  grid-template-rows: 1fr !important;
+  gap: 10px !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+.boardwrap {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+#prep-panel, .card {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  height: 100% !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  align-self: stretch !important;
+}
+
+/* PANEL LATERAL PULIDO */
+#prep-panel, .card {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  height: auto !important;
+  max-height: 100% !important;
+  align-self: center !important;
+  padding: 16px 14px !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  overflow: visible !important;
+}
+#prep-title {
+  font-size: 13px !important;
+  letter-spacing: 0.5px !important;
+  margin: 0 0 4px !important;
+}
+#prep-help {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+  margin: 0 0 8px !important;
+  color: var(--muted) !important;
+}
+#prep-confirm {
+  min-height: 38px !important;
+  margin-top: auto !important;
+  font-weight: 700 !important;
+}
+.card h3 {
+  font-size: 11px !important;
+  letter-spacing: 1.5px !important;
+  margin: 0 0 6px !important;
+}
+.status {
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  margin-bottom: 8px !important;
+}
+.controls {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr 1fr !important;
+  gap: 6px !important;
+  margin-top: 8px !important;
+}
+.controls button {
+  height: 38px !important;
+  font-size: 15px !important;
+}
+.hint {
+  font-size: 10px !important;
+  margin-top: 8px !important;
+  text-align: center !important;
+}
+
+/* PANEL ANCLADO ABAJO */
+#prep-panel, .card {
+  align-self: end !important;
+  margin-top: auto !important;
+  height: auto !important;
+  max-height: none !important;
+}
+.layout > div:first-child {
+  align-items: stretch !important;
+}
+/* Ganar un poco más de espacio vertical */
+.topbar {
+  margin-bottom: 4px !important;
+}
+.player {
+  padding: 5px 8px !important;
+}
+header {
+  padding-top: 4px !important;
+  padding-bottom: 2px !important;
+}
+
+/* REFINAMIENTO FINAL */
+.boardwrap {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+#prep-panel, .card {
+  background: rgba(17, 25, 39, 0.92) !important;
+  backdrop-filter: blur(6px) !important;
+  border: 1px solid rgba(255, 209, 102, 0.25) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35) !important;
+  width: 260px !important;
+  margin-left: auto !important;
+}
+.layout > div:first-child {
+  grid-template-columns: 1fr 270px !important;
+}
+.controls button {
+  background: #1a2a40 !important;
+  border-color: #3a4d68 !important;
+}
+.controls button:hover {
+  background: #243650 !important;
+  border-color: var(--gold) !important;
+}
+#prep-confirm {
+  background: #174b77 !important;
+  border-color: #277fbd !important;
+}
+#prep-confirm:hover {
+  background: #1e5a8a !important;
+}
+
+/* LIMPIAR DOBLE BORDE */
+.card, #prep-panel {
+  border: 1px solid rgba(255, 209, 102, 0.2) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+  outline: none !important;
+}
+.card::before, .card::after,
+#prep-panel::before, #prep-panel::after {
+  display: none !important;
+}
+
+/* CENTRAR TABLERO Y LIMPIAR BORDE */
+.layout > div:first-child {
+  grid-template-columns: 1fr 260px !important;
+  justify-items: center !important;
+}
+.boardwrap {
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+#board {
+  margin: 0 auto !important;
+}
+.card, #prep-panel {
+  border: none !important;
+  box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.18), 0 8px 24px rgba(0,0,0,.3) !important;
+  background: #111927 !important;
+}
+
+/* OCULTAR PREP-PANEL CUANDO NO CORRESPONDE */
+#prep-panel {
+  display: none !important;
+}
+#prep-panel[style*="display: flex"],
+#prep-panel[style*="display:flex"] {
+  display: flex !important;
+}
+#prep-panel[style*="display: flex"] ~ .card,
+#prep-panel[style*="display:flex"] ~ .card {
+  display: none !important;
+}
+
+/* PANEL QUE CABE COMPLETO */
+#prep-panel, .card {
+  width: 240px !important;
+  max-width: 240px !important;
+  margin-right: 8px !important;
+  margin-bottom: 8px !important;
+  padding: 12px 12px !important;
+  align-self: end !important;
+}
+.layout > div:first-child {
+  grid-template-columns: 1fr 250px !important;
+  padding-right: 4px !important;
+}
+.controls button {
+  height: 32px !important;
+  font-size: 14px !important;
+}
+.hint {
+  font-size: 9px !important;
+  margin-top: 6px !important;
+}
+
+/* CENTRAR TABLERO EN SU ZONA */
+.layout > div:first-child {
+  display: grid !important;
+  grid-template-columns: 1fr 250px !important;
+  justify-items: center !important;
+  align-items: center !important;
+}
+.boardwrap {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+#board {
+  margin: auto !important;
+}
+
+/* CENTRADO REAL */
+.layout > div:first-child {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 20px !important;
+  height: 100% !important;
+}
+.boardwrap {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+#prep-panel, .card {
+  flex: 0 0 240px !important;
+  align-self: flex-end !important;
+  margin-bottom: 10px !important;
+}
+
+/* LAYOUT CORREGIDO */
+.layout > div:first-child {
+  display: grid !important;
+  grid-template-columns: 1fr 250px !important;
+  grid-template-rows: 1fr !important;
+  height: 100% !important;
+  align-items: center !important;
+  justify-items: center !important;
+}
+.boardwrap {
+  grid-column: 1 !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+#board {
+  margin: auto !important;
+}
+#prep-panel, .card {
+  grid-column: 2 !important;
+  align-self: end !important;
+  justify-self: end !important;
+  margin: 0 10px 10px 0 !important;
+  width: 230px !important;
+}
+
+/* CENTRAR CONJUNTO */
+.layout > div:first-child {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 30px !important;
+  height: 100% !important;
+  width: 100% !important;
+}
+.boardwrap {
+  flex: 0 0 auto !important;
+}
+#prep-panel, .card {
+  flex: 0 0 230px !important;
+  align-self: flex-end !important;
+  margin-bottom: 12px !important;
+}
+
+/* PANEL ABSOLUTO + TABLERO CENTRADO */
+.layout > div:first-child {
+  position: relative !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  height: 100% !important;
+  width: 100% !important;
+}
+.boardwrap {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+#prep-panel, .card {
+  position: absolute !important;
+  right: 12px !important;
+  bottom: 12px !important;
+  width: 230px !important;
+  z-index: 5 !important;
+}
+
+/* PULIDO FINAL */
+#prep-panel, .card {
+  right: 16px !important;
+  bottom: 16px !important;
+  width: 240px !important;
+  padding: 14px !important;
+  border-radius: 14px !important;
+}
+.controls button {
+  height: 34px !important;
+  border-radius: 8px !important;
+}
+#board {
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,.25));
+}
+
+/* ACABADO PROFESIONAL */
+#board {
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,.3));
+}
+.cell {
+  border-radius: 4px !important;
+  transition: background .1s ease;
+}
+#prep-panel, .card {
+  background: rgba(15, 22, 35, 0.95) !important;
+  border: 1px solid rgba(255, 209, 102, 0.15) !important;
+  box-shadow: 0 10px 40px rgba(0,0,0,.4) !important;
+  backdrop-filter: blur(8px);
+  padding: 16px !important;
+  border-radius: 16px !important;
+}
+.card h3, #prep-title {
+  font-size: 11px !important;
+  letter-spacing: 1.2px !important;
+  text-transform: uppercase !important;
+  opacity: 0.7 !important;
+}
+.status, #prep-help {
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+}
+.controls button {
+  height: 36px !important;
+  font-size: 16px !important;
+  border-radius: 10px !important;
+}
+#prep-confirm {
+  height: 40px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  border-radius: 10px !important;
+}
+.hint {
+  opacity: 0.5 !important;
+  font-size: 10px !important;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">GRAVITY <span>GO</span></div>
+  <div class="sub">ONLINE MULTIPLAYER · VERSION 0.1</div>
+<div id="header-actions" class="header-actions">
+  <button id="pause">Pausar</button>
+</div></header>
+<main>
+  <section class="topbar">
+    <div id="pBlue" class="player blue">
+      <div class="pname">JUGADOR BLANCO</div>
+      <div class="score" id="scoreBlue">0</div>
+      <div class="target">OBJETIVO: 20 CAPTURAS</div>
+    </div>
+    <div class="clock" id="clock">
+      <small>TIEMPO</small>
+      <strong id="time">10:00</strong>
+      <small>POR PARTIDA</small>
+    </div>
+    <div id="pRed" class="player red">
+      <div class="pname" id="redName">JUGADOR ROJO</div>
+      <div class="score" id="scoreRed">0</div>
+      <div class="target">OBJETIVO: 20 CAPTURAS</div>
+    </div>
+  </section>
+
+  <section class="layout">
+    <div>
+      <div class="boardwrap"><div id="board" aria-label="Tablero de Gravity Go"></div></div>
+<div id="prep-panel" style="display:none">
+<strong id="prep-title" style="color:#ffd166">COLOCACIÓN INICIAL</strong>
+<p id="prep-help">Selecciona una columna libre y confirma.</p>
+<button id="prep-confirm" class="primary" disabled>Confirmar posición</button>
+</div>
+<div class="card">
+        <h3>ESTADO</h3>
+        <div style="margin-top:10px">
+  <button id="find" style="width:100%;height:40px;background:#1a5a9a;border:none;border-radius:10px;color:white;font-weight:700;cursor:pointer">Buscar rival</button>
+  <button id="cancel" disabled style="width:100%;height:36px;margin-top:6px;border-radius:8px">Cancelar búsqueda</button>
+</div>
+<div class="status" id="status" aria-live="polite">Preparando tablero...</div>
+      <div class="controls">
+        <button id="left" aria-label="Mover a la izquierda">←</button>
+        <button id="down" aria-label="Acelerar caída">↓</button>
+        <button id="right" aria-label="Mover a la derecha">→</button>
+      </div>
+      <div class="hint">Teclado: ← → para mover · ↓ para acelerar · P para pausar</div>
+    </div>
+  </section>
+  <select id="mode" class="mode" aria-hidden="true" tabindex="-1" style="display:none">
+    <option value="ai">Jugador vs IA</option>
+    <option value="local">Dos jugadores locales</option>
+  </select>
+</main>
+
+<div id="main-menu" class="show" role="dialog" aria-modal="true" aria-label="Menú principal">
+  <div class="menu-inner">
+    <div class="menu-brand">GRAVITY <span>GO</span></div>
+    <div class="menu-eyebrow">ONLINE MULTIPLAYER</div>
+    <h1 class="menu-tagline">Cada movimiento cuenta.</h1>
+    <p class="menu-description">Controla la gravedad. Protege tus grupos. Captura para ganar.</p>
+    <div class="menu-options">
+      <button id="menu-ai" class="menu-option primary">
+        <span class="menu-icon">◆</span>
+        <span class="menu-option-copy">
+          <strong>Jugar contra la IA</strong>
+          <small>Un duelo estratégico contra la máquina.</small>
+        </span>
+      </button>
+      <button id="menu-local" class="menu-option">
+        <span class="menu-icon">Ⅱ</span>
+        <span class="menu-option-copy">
+          <strong>Dos jugadores locales</strong>
+          <small>Dos personas, un tablero y una sola victoria.</small>
+        </span>
+      </button>
+      <button id="menu-online" class="menu-option">
+        <span class="menu-icon">↗</span>
+        <span class="menu-option-copy">
+          <strong>Modo online</strong>
+          <small>Accede a la versión online del juego.</small>
+        </span>
+      </button>
+    </div>
+    <div class="menu-footer">GRAVITY GO · VERSION 0.1</div>
+  </div>
+</div>
+<div id="overlay">
+  <div class="modal">
+    <h2 id="resultTitle">Fin de partida</h2>
+    <p id="resultText"></p>
+    <button id="again" class="primary">Jugar otra vez</button>
+    <button id="to-menu" class="menu-return">Menú principal</button>
+  </div>
+</div>
+
+<div id="pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+  <div class="pause-modal">
+    <div class="pause-kicker">GRAVITY GO</div>
+    <h2 id="pause-title">EN PAUSA</h2>
+    <p>Tu partida está detenida. ¿Qué quieres hacer?</p>
+    <div class="pause-actions">
+      <button id="pause-continue" class="primary">▶ CONTINUAR PARTIDA</button>
+      <button id="pause-new" class="pause-menu-button">↻ NUEVA PARTIDA</button>
+      <button id="pause-to-menu" class="pause-menu-button">⌂ VOLVER AL MENÚ PRINCIPAL</button>
+    </div>
+  </div>
+</div>
+<div id="dice-overlay" class="dice-overlay" role="dialog" aria-modal="true" aria-labelledby="dice-title">
+  <div class="dice-panel">
+    <div class="dice-kicker">Gravity Go · Sorteo inicial</div>
+    <h2 id="dice-title" class="dice-title">QUE GANE EL MÁS ALTO</h2>
+    <div class="dice-subtitle">Dos dados. Un solo ganador. El número más alto empieza.</div>
+    <div class="dice-arena">
+      <div class="dice-contestant">
+        <div id="dice-name-1" class="dice-player-name">JUGADOR 1</div>
+        <div id="dice-face-1" class="dice-face">⚄</div>
+      </div>
+      <div class="dice-vs">VS</div>
+      <div class="dice-contestant">
+        <div id="dice-name-2" class="dice-player-name">JUGADOR 2</div>
+        <div id="dice-face-2" class="dice-face">⚄</div>
+      </div>
+    </div>
+    <div id="dice-status" class="dice-status" aria-live="polite">Preparando el lanzamiento...</div>
+    <div class="dice-hint">El empate obliga a repetir</div>
+  </div>
+</div>
+<script>
+"use strict";
+const W=8,H=12,GOAL=20,MATCH_SECONDS=600;
+const BLUE=1,RED=2;
+const SPAWN_ORDER=[3,4,2,5,1,6,0,7];
+const $=id=>document.getElementById(id);
+let board,piece,player,scores,mode,remaining,gameOver,paused,suddenDeath;
+let lastFrame=0,fallAccumulator=0,turnWait=0,aiTarget=null,aiThink=0;
+let lastStatus="",fastDrop=false,moveRepeat=0;
+let diceRollId=0;
+let prepPhase=false,prepSelectedColumn=null,prepOrder=[],prepIndex=0,openingPlayer=BLUE;
+let prepColumns={[BLUE]:null,[RED]:null};
+
+function say(s){lastStatus=s;$("status").textContent=s}
+function currentIsAI(){return mode==="ai"&&player===RED}
+function other(p){return p===BLUE?RED:BLUE}
+function colorName(p){return p===BLUE?"Blanco":"Negro"}
+function cloneBoard(b){return b.map(row=>row.slice())}
+function emptyBoard(){return Array.from({length:H},()=>Array(W).fill(0))}
+function inBounds(x,y){return x>=0&&x<W&&y>=0&&y<H}
+function neighbors(x,y){return [[x-1,y],[x+1,y],[x,y-1],[x,y+1]].filter(([a,b])=>inBounds(a,b))}
+function groupsOf(b){
+ const seen=Array.from({length:H},()=>Array(W).fill(false)),groups=[];
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  if(!b[y][x]||seen[y][x])continue;
+  const c=b[y][x],stack=[[x,y]],stones=[],lib=new Set();seen[y][x]=true;
+  while(stack.length){
+   const [a,d]=stack.pop();stones.push([a,d]);
+   for(const [nx,ny] of neighbors(a,d)){
+    if(!b[ny][nx])lib.add(ny*W+nx);
+    else if(b[ny][nx]===c&&!seen[ny][nx]){seen[ny][nx]=true;stack.push([nx,ny])}
+   }
+  }
+  groups.push({color:c,stones,liberties:lib.size});
+ }
+ return groups;
+}
+function settle(b){
+ let captured=[0,0,0],changed=true,loops=0;
+ while(changed&&loops++<H*W){
+  changed=false;
+  const groups=groupsOf(b),remove=[];
+  for(const g of groups)if(g.liberties===0)remove.push(...g.stones.map(([x,y])=>[x,y,g.color]));
+  if(remove.length){
+   changed=true;
+   for(const [x,y,c] of remove){if(b[y][x]===c){b[y][x]=0;captured[c]++}}
+  }
+  if(changed){
+   for(let x=0;x<W;x++){
+    const stack=[];
+    for(let y=H-1;y>=0;y--)if(b[y][x])stack.push(b[y][x]);
+    for(let y=H-1;y>=0;y--)b[y][x]=stack[H-1-y]||0;
+   }
+  }
+ }
+ return captured;
+}
+function tryPlacement(b,x,y,p){
+ const next=cloneBoard(b);
+ if(!inBounds(x,y)||next[y][x])return {ok:false};
+ next[y][x]=p;
+ const captured=settle(next);
+ const own=groupsOf(next).filter(g=>g.color===p);
+ if(own.some(g=>g.liberties===0))return {ok:false,suicide:true};
+ return {ok:true,board:next,captured};
+}
+function canOccupy(x,y){return inBounds(x,y)&&!board[y][x]}
+function landingY(b,x){
+ if(b[0][x])return -1;
+ let y=0;
+ while(y+1<H&&!b[y+1][x])y++;
+ return y;
+}
+function spawnPiece(){
+ let col=-1;
+ for(const x of SPAWN_ORDER)if(!board[0][x]){col=x;break}
+ if(col<0){finishByScore("No quedan columnas disponibles.");return}
+ piece={x:col,y:0};
+ fallAccumulator=0;fastDrop=false;
+ if(currentIsAI()){
+  aiTarget=chooseAITarget();aiThink=0;
+ }else aiTarget=null;
+ say(currentIsAI()?"La IA está pensando...":("Turno de "+colorName(player)+". Mueve tu cubo."));
+ render();
+}
+function evaluateBoard(b){
+ const groups=groupsOf(b);
+ let value=0;
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  if(b[y][x]===RED)value+=1.1;
+  else if(b[y][x]===BLUE)value-=1.1;
+ }
+ for(const g of groups){
+  const sign=g.color===RED?1:-1;
+  value+=sign*Math.min(g.liberties,4)*g.stones.length*.55;
+  if(g.liberties===1){
+   value-=sign*3.8*g.stones.length;
+  }
+ }
+ return value;
+}
+function tacticalValue(b,captured,redExtra,blueExtra){
+ let value=evaluateBoard(b);
+ value+=(captured[BLUE]-captured[RED])*8;
+ const redTotal=scores[RED]+(redExtra||0)+captured[BLUE]-captured[RED];
+ const blueTotal=scores[BLUE]+(blueExtra||0)+captured[RED]-captured[BLUE];
+ if(redTotal>=GOAL)return 100000;
+ if(blueTotal>=GOAL)return -100000;
+ return value;
+}
+function aiSearch(b,depth,turn,redScore,blueScore){
+ if(redScore>=GOAL)return 100000+depth;
+ if(blueScore>=GOAL)return -100000-depth;
+
+ let best=turn===RED?-Infinity:Infinity;
+ let found=false;
+
+ for(let x=0;x<W;x++){
+  const y=landingY(b,x);
+  if(y<0)continue;
+
+  const move=tryPlacement(b,x,y,turn);
+  if(!move.ok)continue;
+  found=true;
+
+  const redGain=move.captured[BLUE]||0;
+  const blueGain=move.captured[RED]||0;
+  const gained=turn===RED?redGain:blueGain;
+  const nextRed=redScore+redGain-blueGain;
+  const nextBlue=blueScore+blueGain-redGain;
+
+  let value;
+  if(suddenDeath&&gained>0){
+   value=turn===RED?100000+depth:-100000-depth;
+  }else if(nextRed>=GOAL){
+   value=100000+depth;
+  }else if(nextBlue>=GOAL){
+   value=-100000-depth;
+  }else if(depth<=1){
+   value=evaluateBoard(move.board)+(nextRed-nextBlue)*12;
+  }else{
+   value=aiSearch(
+    move.board,depth-1,other(turn),nextRed,nextBlue
+   );
+  }
+
+  if(turn===RED){
+   if(value>best)best=value;
+  }else{
+   if(value<best)best=value;
+  }
+ }
+
+ if(!found){
+  if(redScore>blueScore)return 90000+depth;
+  if(blueScore>redScore)return -90000-depth;
+  return evaluateBoard(b)+(redScore-blueScore)*12;
+ }
+ return best;
+}
+function chooseAITarget(){
+ const candidates=[];
+ let bestValue=-Infinity;
+
+ for(let x=0;x<W;x++){
+  const y=landingY(board,x);
+  if(y<0)continue;
+
+  const move=tryPlacement(board,x,y,RED);
+  if(!move.ok)continue;
+
+  const redGain=move.captured[BLUE]||0;
+  const blueGain=move.captured[RED]||0;
+  const redScore=scores[RED]+redGain-blueGain;
+  const blueScore=scores[BLUE]+blueGain-redGain;
+
+  let value;
+  if(redScore>=GOAL){
+   value=100000;
+  }else if(suddenDeath&&redGain>0){
+   value=100000;
+  }else if(blueScore>=GOAL){
+   value=-100000;
+  }else{
+   value=aiSearch(
+    move.board,2,BLUE,redScore,blueScore
+   );
+  }
+
+  // Ligera preferencia por capturar sin sacrificar grupos propios.
+  value+=(redGain-blueGain)*1.5;
+  candidates.push({x,value});
+
+  if(value>bestValue)bestValue=value;
+ }
+
+ if(!candidates.length){
+  for(const x of SPAWN_ORDER){
+   if(!board[0][x])return x;
+  }
+  return piece?piece.x:3;
+ }
+
+ // Normalmente elige la mejor jugada; ocasionalmente varía
+ // entre alternativas cercanas para evitar un juego mecánico.
+ const nearBest=candidates.filter(c=>c.value>=bestValue-2.5);
+ if(nearBest.length>1&&Math.random()<0.14){
+  const alternatives=nearBest.filter(c=>c.value<bestValue);
+  if(alternatives.length){
+   return alternatives[Math.floor(Math.random()*alternatives.length)].x;
+  }
+ }
+
+ candidates.sort((a,b)=>b.value-a.value);
+ return candidates[0].x;
+}function prepAvailable(x){
+ return Number.isInteger(x)&&x>=0&&x<W&&!Object.values(prepColumns).includes(x);
+}
+function prepSelect(x){
+ if(!prepPhase||paused||gameOver||currentIsAI()||!prepAvailable(x))return;
+ prepSelectedColumn=x;
+ $("prep-confirm").disabled=false;
+ say("Columna "+(x+1)+" seleccionada. Confirma tu ficha.");
+ render();
+}
+function prepMove(dx){
+ if(!prepPhase||paused||currentIsAI())return;
+ let x=prepSelectedColumn===null?(dx>0?-1:W):prepSelectedColumn;
+ for(let i=0;i<W;i++){
+  x+=dx;if(x<0||x>=W)return;
+  if(prepAvailable(x)){prepSelect(x);return;}
+ }
+}
+function prepConfirm(){
+ if(!prepPhase||paused||currentIsAI()||!prepAvailable(prepSelectedColumn))return;
+ const p=player,x=prepSelectedColumn;
+ board[H-1][x]=p;prepColumns[p]=x;prepSelectedColumn=null;prepIndex++;
+ if(prepIndex>=prepOrder.length){
+  prepPhase=false;
+  $("prep-panel").style.display="none";
+  say("Preparación completada. Comienza la partida.");
+  beginTurn(openingPlayer);
+  return;
+ }
+ player=prepOrder[prepIndex];
+ say(currentIsAI()?"La IA prepara su ficha inicial.":"El segundo jugador: elige otra columna.");
+ render();
+ if(currentIsAI()){
+  const col=SPAWN_ORDER.find(prepAvailable);
+  if(col!==undefined){prepSelectedColumn=col;prepConfirmAI();}
+ }
+}
+function prepConfirmAI(){
+ if(!prepPhase||!currentIsAI()||!prepAvailable(prepSelectedColumn))return;
+ const p=player,x=prepSelectedColumn;
+ board[H-1][x]=p;prepColumns[p]=x;prepSelectedColumn=null;prepIndex++;
+ if(prepIndex>=prepOrder.length){
+  prepPhase=false;$("prep-panel").style.display="none";
+  say("Preparación completada. Comienza la partida.");beginTurn(openingPlayer);return;
+ }
+ player=prepOrder[prepIndex];render();
+ if(currentIsAI()){const col=SPAWN_ORDER.find(prepAvailable);if(col!==undefined){prepSelectedColumn=col;prepConfirmAI();}}
+ else say("Elige una columna libre y confirma tu ficha inicial.");
+}
+function prepStart(winner){
+ openingPlayer=winner;prepPhase=true;prepSelectedColumn=null;
+ prepColumns={[BLUE]:null,[RED]:null};prepOrder=[winner,other(winner)];prepIndex=0;
+ piece=null;player=prepOrder[0];paused=false;turnWait=0;fallAccumulator=0;aiTarget=null;fastDrop=false;
+ $("pause").textContent="Pausar";
+ $("prep-panel").style.display="flex";
+ $("prep-confirm").disabled=true;
+ say("El ganador de los dados elige primero su columna.");
+ render();
+ if(currentIsAI()){const col=SPAWN_ORDER.find(prepAvailable);if(col!==undefined){prepSelectedColumn=col;prepConfirmAI();}}
+}
+function movePiece(dx){
+ if(!piece||gameOver||paused||currentIsAI())return;
+ const nx=piece.x+dx;
+ if(canOccupy(nx,piece.y)){piece.x=nx;render()}
+}
+function lockPiece(){
+ if(!piece||gameOver)return;
+ const x=piece.x,y=piece.y,p=player;
+ const result=tryPlacement(board,x,y,p);
+ piece=null;
+ if(!result.ok){
+  say(result.suicide?"Jugada anulada: suicidio prohibido. Turno perdido.":"Jugada no válida. Turno perdido.");
+  turnWait=450;return;
+ }
+ board=result.board;
+ const enemy=other(p);
+ const gained=result.captured[enemy]||0;
+ scores[p]+=gained;
+ render();
+ if(scores[p]>=GOAL){endGame(p,"¡"+colorName(p)+" alcanza las "+GOAL+" capturas!");return}
+ if(suddenDeath&&gained>0){endGame(p,"¡Captura decisiva en muerte súbita!");return}
+ if(gained>0)say(colorName(p)+" captura "+gained+" cubo"+(gained===1?"":"s")+".");
+ else say("Cubo colocado. Sin capturas.");
+ if(!hasAnySpawn()){
+  finishByScore("El tablero está bloqueado.");
+  return;
+ }
+ turnWait=550;
+}
+function hasAnySpawn(){return SPAWN_ORDER.some(x=>!board[0][x])}
+function beginTurn(p){
+ if(gameOver)return;
+ player=p;piece=null;turnWait=0;fallAccumulator=0;aiTarget=null;
+ spawnPiece();render();
+}
+function finishByScore(reason){
+ if(scores[BLUE]>scores[RED])endGame(BLUE,reason+" Más capturas acumuladas.");
+ else if(scores[RED]>scores[BLUE])endGame(RED,reason+" Más capturas acumuladas.");
+ else if(reason.includes("bloqueado"))endGame(0,reason+" La puntuación está empatada.");
+ else {suddenDeath=true;say("¡Muerte súbita! La siguiente captura decide la partida.");}
+}
+function endGame(winner,reason){
+ gameOver=true;piece=null;paused=false;
+ $("pause").textContent="Pausar";
+ $("resultTitle").textContent=winner===0?"¡Tablas!":"¡Gana "+colorName(winner)+"!";
+ $("resultText").textContent=reason+" Marcador final: Blanco "+scores[BLUE]+" — Negro "+scores[RED]+".";
+ $("overlay").classList.add("show");
+ say(reason);
+ render();
+}
+function updateClock(){
+ const n=Math.max(0,Math.ceil(remaining));
+ $("time").textContent=String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0");
+ $("clock").classList.toggle("urgent",n<=60);
+}
+function render(){
+ const el=$("board");el.replaceChildren();
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const cell=document.createElement("div");
+  cell.className="cell"+(board[y][x]===BLUE?" blue":board[y][x]===RED?" red":"");
+  if(piece&&piece.x===x&&piece.y===y)cell.classList.add("falling");
+if(prepPhase&&y===H-1&&x===prepSelectedColumn&&prepAvailable(x))cell.classList.add("prep-preview");
+  cell.setAttribute("aria-label",`Fila ${y+1}, columna ${x+1}`);
+  cell.addEventListener("click",()=>{
+   if(prepPhase){prepSelect(x);return;}
+   if(!piece||gameOver||paused||currentIsAI())return;
+   const dx=x-piece.x;
+   if(dx)movePiece(Math.sign(dx));
+  });
+  el.appendChild(cell);
+ }
+ $("scoreBlue").textContent=scores[BLUE];
+ $("scoreRed").textContent=scores[RED];
+ $("pBlue").classList.toggle("active",!gameOver&&player===BLUE);
+ $("pRed").classList.toggle("active",!gameOver&&player===RED);
+ $("redName").textContent=mode==="ai"?"IA NEGRA":"JUGADOR NEGRO";
+ $("left").disabled=!piece||paused||gameOver||currentIsAI();
+ $("right").disabled=!piece||paused||gameOver||currentIsAI();
+ $("down").disabled=prepPhase||!piece||paused||gameOver||currentIsAI();
+if(prepPhase){
+ $("prep-panel").style.display="flex";
+ $("prep-confirm").disabled=paused||currentIsAI()||!prepAvailable(prepSelectedColumn);
+ $("prep-title").textContent=prepSelectedColumn===null?"¿DÓNDE QUIERES EMPEZAR?":"¿AQUÍ? · COLUMNA "+(prepSelectedColumn+1);
+ $("prep-help").textContent="Jugador "+(player===BLUE?"1 · BLANCAS":"2 · NEGRAS")+". Toca una columna o usa las flechas ← →. La ficha fantasma muestra dónde empezará. Cuando te guste, pulsa Confirmar ficha.";
+}else{
+ $("prep-panel").style.display="none";
+}
+ updateClock();
+}
+function startDiceRoll(){
+ const overlay=$("dice-overlay");
+ const face1=$("dice-face-1");
+ const face2=$("dice-face-2");
+ const status=$("dice-status");
+ const name1=$("dice-name-1");
+ const name2=$("dice-name-2");
+ const rollId=++diceRollId;
+
+ name1.textContent=mode==="ai"?"TÚ":"JUGADOR 1";
+ name2.textContent=mode==="ai"?"IA":"JUGADOR 2";
+ face1.textContent="⚄";
+ face2.textContent="⚄";
+ face1.classList.remove("rolling");
+ face2.classList.remove("rolling");
+ status.classList.remove("winner");
+ status.textContent="¡Que empiece el duelo!";
+ overlay.classList.add("show");
+
+ function throwAgain(){
+  if(rollId!==diceRollId)return;
+  face1.classList.add("rolling");
+  face2.classList.add("rolling");
+  status.classList.remove("winner");
+  status.textContent="Lanzando los dados...";
+  const animation=setInterval(()=>{
+   if(rollId!==diceRollId){clearInterval(animation);return;}
+   face1.textContent=String(1+Math.floor(Math.random()*6));
+   face2.textContent=String(1+Math.floor(Math.random()*6));
+  },85);
+
+  setTimeout(()=>{
+   clearInterval(animation);
+   if(rollId!==diceRollId)return;
+   const a=1+Math.floor(Math.random()*6);
+   const b=1+Math.floor(Math.random()*6);
+   face1.textContent=String(a);
+   face2.textContent=String(b);
+   face1.classList.remove("rolling");
+   face2.classList.remove("rolling");
+
+   if(a===b){
+    status.textContent="¡Empate! Repetimos el lanzamiento...";
+    setTimeout(throwAgain,950);
+    return;
+   }
+
+   const winner=a>b?BLUE:RED;
+   const winnerName=mode==="ai"
+    ?(winner===BLUE?"¡Empiezas tú!":"¡Empieza la IA!")
+    :"¡Empieza el Jugador "+(winner===BLUE?"1":"2")+"!";
+   status.textContent=winnerName;
+   status.classList.add("winner");
+
+   setTimeout(()=>{
+    if(rollId!==diceRollId)return;
+    overlay.classList.remove("show");
+    paused=false;
+    $("pause").textContent="Pausar";
+    prepStart(winner);
+    render();
+   },1450);
+  },1450);
+ }
+ throwAgain();
+}
+
+function showMainMenu(){
+ diceRollId++;
+ paused=true;
+ prepPhase=false;
+ fastDrop=false;
+ $("dice-overlay").classList.remove("show");
+ $("pause-overlay").classList.remove("show");
+ $("overlay").classList.remove("show");
+ $("prep-panel").style.display="none";
+ $("main-menu").classList.add("show");
+}
+function launchFromMenu(selectedMode){
+ $("mode").value=selectedMode;
+ $("main-menu").classList.remove("show");
+ resetGame();
+}
+function resetGame(){
+ diceRollId++;
+ board=emptyBoard();piece=null;player=BLUE;scores={[BLUE]:0,[RED]:0};
+ mode=$("mode").value;remaining=MATCH_SECONDS;gameOver=false;paused=true;
+ suddenDeath=false;turnWait=0;lastFrame=0;fallAccumulator=0;aiTarget=null;
+ fastDrop=false;moveRepeat=0;
+ $("overlay").classList.remove("show");$("pause").textContent="Pausar";
+ say("Decidiendo quién empieza...");
+ render();
+ startDiceRoll();
+}
+function tick(now){
+ requestAnimationFrame(tick);
+ if(!lastFrame)lastFrame=now;
+ const dt=Math.min((now-lastFrame)/1000,.1);lastFrame=now;
+ if(gameOver||paused||prepPhase){return}
+ if(!suddenDeath){
+  remaining-=dt;
+  if(remaining<=0){
+   remaining=0;updateClock();
+   if(scores[BLUE]===scores[RED]){
+    suddenDeath=true;
+    say("¡Tiempo! Empate a puntos. Muerte súbita: la siguiente captura gana.");
+   }else{
+    endGame(scores[BLUE]>scores[RED]?BLUE:RED,"Tiempo agotado.");
+    return;
+   }
+  }
+ }
+ updateClock();
+ if(turnWait>0){
+  turnWait-=dt*1000;
+  if(turnWait<=0&&!gameOver)beginTurn(other(player));
+  return;
+ }
+ if(!piece||gameOver)return;
+ if(currentIsAI()){
+  aiThink+=dt;
+  if(aiTarget!==null&&piece.x!==aiTarget&&aiThink>.11){
+   aiThink=0;
+   const dx=Math.sign(aiTarget-piece.x),nx=piece.x+dx;
+   if(canOccupy(nx,piece.y))piece.x=nx;
+   else aiTarget=piece.x;
+   render();
+  }
+ }
+ fallAccumulator+=dt;
+ const interval=fastDrop?.045:(currentIsAI()?.40:.48);
+ if(fallAccumulator>=interval){
+  fallAccumulator=0;
+  if(canOccupy(piece.x,piece.y+1)){piece.y++}
+  else{lockPiece();return}
+  render();
+ }
+}
+function togglePause(){
+ if(gameOver||$("dice-overlay").classList.contains("show"))return;
+ paused=!paused;
+ $("pause").textContent=paused?"Continuar":"Pausar";
+ $("pause-overlay").classList.toggle("show",paused);
+ fastDrop=false;
+ say(paused?"Partida pausada.":(suddenDeath?"Muerte súbita: la siguiente captura decide.":lastStatus));
+ render();
+}
+$("menu-ai").addEventListener("click",()=>launchFromMenu("ai"));
+$("menu-local").addEventListener("click",()=>launchFromMenu("local"));
+$("menu-online").addEventListener("click",()=>{window.location.href="online.html";});
+$("to-menu").addEventListener("click",showMainMenu);
+$("pause-continue").addEventListener("click",togglePause);
+$("pause-to-menu").addEventListener("click",showMainMenu);
+$("prep-confirm").addEventListener("click",prepConfirm);
+$("left").addEventListener("click",()=>prepPhase?prepMove(-1):movePiece(-1));
+$("right").addEventListener("click",()=>prepPhase?prepMove(1):movePiece(1));
+$("down").addEventListener("pointerdown",()=>{if(!currentIsAI()&&!paused&&!gameOver)fastDrop=true});
+["pointerup","pointercancel","pointerleave"].forEach(ev=>$("down").addEventListener(ev,()=>fastDrop=false));
+$("new")?.addEventListener("click",resetGame);
+$("again").addEventListener("click",resetGame);
+$("pause").addEventListener("click",togglePause);
+$("mode").addEventListener("change",resetGame);
+document.addEventListener("keydown",e=>{
+ const k=e.key.toLowerCase();
+ if(["arrowleft","arrowright","arrowdown"," ","a","d","s"].includes(k))e.preventDefault();
+ if(k==="p"&&!e.repeat){togglePause();return}
+ if(e.repeat||!piece||gameOver||paused||currentIsAI())return;
+
+ if(mode==="local"){
+  if(player===BLUE){
+   if(k==="arrowleft")movePiece(-1);
+   if(k==="arrowright")movePiece(1);
+   if(k==="arrowdown")fastDrop=true;
+  }else{
+   if(k==="a")movePiece(-1);
+   if(k==="d")movePiece(1);
+   if(k==="s")fastDrop=true;
+  }
+ }else{
+  if(k==="arrowleft")movePiece(-1);
+  if(k==="arrowright")movePiece(1);
+  if(k==="arrowdown")fastDrop=true;
+ }
+
+ if(k===" "){fastDrop=false;lockPiece()}
+});
+document.addEventListener("keyup",e=>{
+ const k=e.key.toLowerCase();
+ if(k==="arrowdown"||k==="s")fastDrop=false;
+});
+resetGame();
+requestAnimationFrame(tick);
+</script>
+
+
+
+
+<script>
+// FIX GRID FORZADO POR JS
+(function() {
+  const style = document.createElement('style');
+  style.textContent = `
+    
+    .cell {
+      aspect-ratio: 1 !important;
+      min-width: fit-content;
+      background: #182437 !important;
+      border: 1px solid #29374d !important;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+</script>
+
+<script>
+// AJUSTE AUTOMÁTICO DEL TABLERO
+(function() {
+  function fitBoard() {
+    const wrap = document.querySelector('.boardwrap');
+    const board = document.getElementById('board');
+    if (!wrap || !board) return;
+
+    const gap = 3;
+    const cols = 8, rows = 12;
+    const availableW = wrap.clientWidth - 16;
+    const availableH = wrap.clientHeight - 16;
+
+    if (availableW < 50 || availableH < 50) return;
+
+    const cell = Math.floor(Math.min(
+      (availableW - gap * (cols - 1)) / cols,
+      (availableH - gap * (rows - 1)) / rows
+    ));
+
+    if (cell < 8) return;
+
+    board.style.width = (cols * cell + (cols - 1) * gap) + 'px';
+    board.style.height = (rows * cell + (rows - 1) * gap) + 'px';
+    board.style.gridTemplateColumns = `repeat(${cols}, ${cell}px)`;
+    board.style.gridTemplateRows = `repeat(${rows}, ${cell}px)`;
+    board.style.gap = gap + 'px';
+    board.style.margin = 'auto';
+  }
+
+  const start = () => {
+    fitBoard();
+    window.addEventListener('resize', fitBoard);
+    if (window.ResizeObserver) {
+      new ResizeObserver(fitBoard).observe(document.querySelector('.boardwrap'));
+    }
+    setTimeout(fitBoard, 100);
+    setTimeout(fitBoard, 500);
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
+})();
+</script>
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Ocultar menú
+  const menu = document.getElementById('main-menu');
+  if (menu) menu.classList.remove('show');
+  if (menu) menu.style.display = 'none';
+  
+  // Mostrar área de juego
+  document.body.style.overflow = 'hidden';
+  
+  // No llamar a resetGame ni startDice
+  console.log('Online: tablero listo, esperando Buscar rival');
+});
+</script>
+</body>
+</html>
+

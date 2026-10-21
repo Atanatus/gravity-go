@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>GRAVITY GO — v0.1</title>
+<style>
+:root{color-scheme:dark;--bg:#090d15;--panel:#111927;--line:#29354a;--blue:#f5f5f5;--red:#aeb5c0;--text:#f0f5ff;--muted:#9ba9bf;--gold:#ffd166}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top,#17243a 0,#090d15 65%);color:var(--text);font-family:Segoe UI,Arial,sans-serif;min-height:100vh}
+button,select{font:inherit}
+button{border:1px solid #34435a;background:#1b293d;color:var(--text);border-radius:10px;padding:11px 15px;cursor:pointer;touch-action:manipulation}
+button:hover{background:#263951}
+button:disabled{opacity:.4;cursor:default}
+header{text-align:center;padding:18px 10px 8px}
+.logo{font-weight:950;font-size:clamp(27px,5vw,43px);letter-spacing:5px}
+.logo span{color:var(--blue)}
+.sub{color:var(--muted);font-size:12px;letter-spacing:3px;margin-top:4px}
+main{width:min(1050px,100%);margin:auto;padding:10px 14px 25px}
+.topbar{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch;margin-bottom:12px}
+.player{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px;min-width:0}
+.player.red{text-align:right}
+.player.active{border-color:var(--gold);box-shadow:0 0 0 1px #ffd16630}
+.pname{font-size:12px;letter-spacing:2px;color:var(--muted)}
+.score{font-size:clamp(25px,5vw,38px);font-weight:900;line-height:1.25}
+.blue .score{color:#f5f5f5}.red .score{color:#aeb5c0}
+.target{font-size:11px;color:var(--muted)}
+.clock{background:#101827;border:1px solid var(--line);border-radius:13px;min-width:108px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 12px}
+.clock strong{font-size:clamp(23px,4vw,32px);font-variant-numeric:tabular-nums}
+.clock small{color:var(--muted);font-size:10px;letter-spacing:1px}
+.clock.urgent strong{color:var(--red)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:14px;align-items:start}
+.boardwrap{background:#0d1420;border:1px solid var(--line);border-radius:14px;padding:10px;min-width:0}
+#board{width:100%;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;touch-action:manipulation}
+.cell{aspect-ratio:1;border-radius:4px;background:#182437;border:1px solid #29374d;position:relative;min-width:0}
+.cell::after{content:"";position:absolute;inset:15%;border-radius:3px;opacity:0}
+.cell.blue::after,.cell.red::after{opacity:1}
+.cell.blue::after{background:#f5f5f5;border:1px solid #fff;box-shadow:0 0 7px #ffffff35}
+.cell.red::after{background:#080a0e;border:1px solid #d8dce4;box-shadow:inset 0 0 0 1px #000}
+$1
+.cell.prep-preview::after{opacity:.55!important;border:2px dashed #ffd166;box-shadow:0 0 12px #ffd16655}
+.prep-panel{display:none;margin-top:10px;padding:14px;background:#111927;border:1px solid #ffd16666;border-radius:13px;gap:10px;flex-direction:column}
+.prep-panel.show{display:flex}
+.prep-panel strong{font-size:13px;letter-spacing:1px;color:#ffd166}
+.prep-panel p{font-size:13px;line-height:1.5;color:var(--muted);margin:0}
+.prep-panel button{width:100%}
+.cell.ghost{background:#243a50}
+.side{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px}
+.card h3{font-size:12px;letter-spacing:2px;margin:0 0 11px;color:var(--muted)}
+.status{font-size:14px;line-height:1.5;min-height:45px}
+.mode{width:100%;background:#0c1420;color:var(--text);border:1px solid var(--line);padding:10px;border-radius:9px;margin-bottom:9px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.actions button{padding:10px 6px}
+.primary{background:#174b77;border-color:#277fbd}
+.rules{font-size:12px;line-height:1.65;color:var(--muted)}
+.rules b{color:var(--text)}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
+.controls button{font-size:20px;padding:12px 4px;user-select:none}
+.hint{text-align:center;color:var(--muted);font-size:11px;margin:10px 0 2px}
+#overlay{position:fixed;inset:0;background:#050810d9;display:none;align-items:center;justify-content:center;padding:20px;z-index:5}
+#overlay.show{display:flex}
+.modal{width:min(400px,100%);background:#111927;border:1px solid #42516a;border-radius:18px;padding:25px;text-align:center;box-shadow:0 20px 80px #0009}
+.modal h2{font-size:27px;margin:0 0 10px}
+.modal p{color:var(--muted);line-height:1.5}
+.modal button{margin-top:10px}
+@media(max-width:680px){
+ main{padding:7px 9px 18px}
+ .layout{grid-template-columns:1fr}
+ .side{display:grid;grid-template-columns:1fr 1fr}
+ .side .rulescard{grid-column:1/-1}
+ .boardwrap{padding:7px}
+ #board{gap:3px}
+ .cell{border-radius:3px}
+ .topbar{gap:5px}
+ .player{padding:9px}
+ .clock{min-width:83px;padding:6px}
+ .controls button{padding:14px 4px}
+}
+
+/* Sorteo inicial: duelo de dados */
+.dice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0,0,0,.94);
+  color: #fff;
+  text-align: center;
+  backdrop-filter: blur(12px);
+}
+.dice-overlay.show { display: flex; }
+.dice-panel { width: min(540px, 100%); }
+.dice-kicker {
+  font-size: 11px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: #aaa;
+  margin-bottom: 12px;
+}
+.dice-title {
+  font-size: clamp(26px, 6vw, 42px);
+  font-weight: 900;
+  letter-spacing: -.04em;
+  margin: 0 0 10px;
+}
+.dice-subtitle { color: #aaa; font-size: 14px; margin-bottom: 30px; }
+.dice-arena {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+}
+.dice-contestant { display: grid; justify-items: center; gap: 13px; }
+.dice-player-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .15em;
+  color: #ccc;
+}
+.dice-face {
+  width: clamp(82px, 20vw, 118px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #fff, #d8d8d8);
+  color: #080808;
+  font-size: clamp(48px, 11vw, 68px);
+  font-weight: 900;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.12),
+              0 12px 40px rgba(255,255,255,.09);
+  transform: rotate(0deg) scale(1);
+}
+.dice-face.rolling { animation: dice-shake .16s infinite alternate; }
+.dice-vs { font-size: 12px; font-weight: 900; color: #777; }
+.dice-status {
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  margin-top: 28px;
+  font-size: 16px;
+  font-weight: 800;
+}
+.dice-status.winner { font-size: 20px; }
+.dice-hint {
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: .16em;
+  color: #777;
+  text-transform: uppercase;
+}
+@keyframes dice-shake {
+  from { transform: rotate(-9deg) scale(.94); }
+  to { transform: rotate(9deg) scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dice-face.rolling { animation: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">GRAVITY <span>GO</span></div>
+  <div class="sub">STRATEGY MEETS GRAVITY · VERSION 0.1</div>
+</header>
+<main>
+  <section class="topbar">
+    <div id="pBlue" class="player blue">
+      <div class="pname">JUGADOR BLANCO</div>
+      <div class="score" id="scoreBlue">0</div>
+      <div class="target">OBJETIVO: 20 CAPTURAS</div>
+    </div>
+    <div class="clock" id="clock">
+      <small>TIEMPO</small>
+      <strong id="time">10:00</strong>
+      <small>POR PARTIDA</small>
+    </div>
+    <div id="pRed" class="player red">
+      <div class="pname" id="redName">JUGADOR ROJO</div>
+      <div class="score" id="scoreRed">0</div>
+      <div class="target">OBJETIVO: 20 CAPTURAS</div>
+    </div>
+  </section>
+
+  <section class="layout">
+    <div>
+$1
+      <div id="prep-panel" class="prep-panel" aria-live="polite">
+        <strong id="prep-title">COLOCAD VUESTRAS FICHAS</strong>
+        <p id="prep-help">Elegid una columna libre y confirmad la posición inicial.</p>
+        <button id="prep-confirm" class="primary" disabled>Confirmar posición</button>
+      </div>
+      <div class="controls">
+        <button id="left" aria-label="Mover a la izquierda">←</button>
+        <button id="down" aria-label="Acelerar caída">↓ Acelerar</button>
+        <button id="right" aria-label="Mover a la derecha">→</button>
+      </div>
+      <div class="hint">Teclado: ← → para mover · ↓ para acelerar · P para pausar</div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <h3>PARTIDA</h3>
+        <select id="mode" class="mode">
+          <option value="ai">Jugador vs IA</option>
+          <option value="local">Dos jugadores locales</option>
+        </select>
+        <div class="actions">
+          <button id="new" class="primary">Nueva partida</button>
+          <button id="pause">Pausar</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>ESTADO</h3>
+        <div class="status" id="status" aria-live="polite">Preparando tablero...</div>
+      </div>
+      <div class="card rulescard">
+        <h3>REGLAS DE VICTORIA</h3>
+        <div class="rules">
+          <b>20 capturas:</b> victoria inmediata.<br>
+          <b>10 minutos:</b> límite de la partida.<br>
+          <b>Tiempo agotado:</b> gana quien tenga más capturas.<br>
+          <b>Empate:</b> muerte súbita; la siguiente captura decide la partida.<br>
+          <b>Puntuación:</b> cada cubo enemigo eliminado vale 1 punto, también en cadenas.<br>
+          <b>Gravedad:</b> los cubos supervivientes caen después de las capturas.
+        </div>
+      </div>
+    </aside>
+  </section>
+</main>
+
+<div id="overlay">
+  <div class="modal">
+    <h2 id="resultTitle">Fin de partida</h2>
+    <p id="resultText"></p>
+    <button id="again" class="primary">Jugar otra vez</button>
+  </div>
+</div>
+
+<div id="dice-overlay" class="dice-overlay" role="dialog" aria-modal="true" aria-labelledby="dice-title">
+  <div class="dice-panel">
+    <div class="dice-kicker">Gravity Go · Sorteo inicial</div>
+    <h2 id="dice-title" class="dice-title">QUE GANE EL MÁS ALTO</h2>
+    <div class="dice-subtitle">Dos dados. Un solo ganador. El número más alto empieza.</div>
+    <div class="dice-arena">
+      <div class="dice-contestant">
+        <div id="dice-name-1" class="dice-player-name">JUGADOR 1</div>
+        <div id="dice-face-1" class="dice-face">⚄</div>
+      </div>
+      <div class="dice-vs">VS</div>
+      <div class="dice-contestant">
+        <div id="dice-name-2" class="dice-player-name">JUGADOR 2</div>
+        <div id="dice-face-2" class="dice-face">⚄</div>
+      </div>
+    </div>
+    <div id="dice-status" class="dice-status" aria-live="polite">Preparando el lanzamiento...</div>
+    <div class="dice-hint">El empate obliga a repetir</div>
+  </div>
+</div>
+<script>
+"use strict";
+const W=8,H=12,GOAL=20,MATCH_SECONDS=600;
+const BLUE=1,RED=2;
+const SPAWN_ORDER=[3,4,2,5,1,6,0,7];
+const $=id=>document.getElementById(id);
+let board,piece,player,scores,mode,remaining,gameOver,paused,suddenDeath;
+let lastFrame=0,fallAccumulator=0,turnWait=0,aiTarget=null,aiThink=0;
+let lastStatus="",fastDrop=false,moveRepeat=0;
+$1
+let prepPhase=false,prepSelectedColumn=null;
+let prepColumns={[BLUE]:null,[RED]:null};
+let prepOrder=[],prepIndex=0,openingPlayer=BLUE;
+
+function say(s){lastStatus=s;$("status").textContent=s}
+function currentIsAI(){return mode==="ai"&&player===RED}
+function other(p){return p===BLUE?RED:BLUE}
+function colorName(p){return p===BLUE?"Blanco":"Negro"}
+function cloneBoard(b){return b.map(row=>row.slice())}
+function emptyBoard(){return Array.from({length:H},()=>Array(W).fill(0))}
+function inBounds(x,y){return x>=0&&x<W&&y>=0&&y<H}
+function neighbors(x,y){return [[x-1,y],[x+1,y],[x,y-1],[x,y+1]].filter(([a,b])=>inBounds(a,b))}
+function groupsOf(b){
+ const seen=Array.from({length:H},()=>Array(W).fill(false)),groups=[];
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  if(!b[y][x]||seen[y][x])continue;
+  const c=b[y][x],stack=[[x,y]],stones=[],lib=new Set();seen[y][x]=true;
+  while(stack.length){
+   const [a,d]=stack.pop();stones.push([a,d]);
+   for(const [nx,ny] of neighbors(a,d)){
+    if(!b[ny][nx])lib.add(ny*W+nx);
+    else if(b[ny][nx]===c&&!seen[ny][nx]){seen[ny][nx]=true;stack.push([nx,ny])}
+   }
+  }
+  groups.push({color:c,stones,liberties:lib.size});
+ }
+ return groups;
+}
+function settle(b){
+ let captured=[0,0,0],changed=true,loops=0;
+ while(changed&&loops++<H*W){
+  changed=false;
+  const groups=groupsOf(b),remove=[];
+  for(const g of groups)if(g.liberties===0)remove.push(...g.stones.map(([x,y])=>[x,y,g.color]));
+  if(remove.length){
+   changed=true;
+   for(const [x,y,c] of remove){if(b[y][x]===c){b[y][x]=0;captured[c]++}}
+  }
+  if(changed){
+   for(let x=0;x<W;x++){
+    const stack=[];
+    for(let y=H-1;y>=0;y--)if(b[y][x])stack.push(b[y][x]);
+    for(let y=H-1;y>=0;y--)b[y][x]=stack[H-1-y]||0;
+   }
+  }
+ }
+ return captured;
+}
+function tryPlacement(b,x,y,p){
+ const next=cloneBoard(b);
+ if(!inBounds(x,y)||next[y][x])return {ok:false};
+ next[y][x]=p;
+ const captured=settle(next);
+ const own=groupsOf(next).filter(g=>g.color===p);
+ if(own.some(g=>g.liberties===0))return {ok:false,suicide:true};
+ return {ok:true,board:next,captured};
+}
+function canOccupy(x,y){return inBounds(x,y)&&!board[y][x]}
+function landingY(b,x){
+ if(b[0][x])return -1;
+ let y=0;
+ while(y+1<H&&!b[y+1][x])y++;
+ return y;
+}
+function spawnPiece(){
+ let col=-1;
+ for(const x of SPAWN_ORDER)if(!board[0][x]){col=x;break}
+ if(col<0){finishByScore("No quedan columnas disponibles.");return}
+ piece={x:col,y:0};
+ fallAccumulator=0;fastDrop=false;
+ if(currentIsAI()){
+  aiTarget=chooseAITarget();aiThink=0;
+ }else aiTarget=null;
+ say(currentIsAI()?"La IA está pensando...":("Turno de "+colorName(player)+". Mueve tu cubo."));
+ render();
+}
+function evaluateBoard(b){
+ const groups=groupsOf(b);
+ let value=0;
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  if(b[y][x]===RED)value+=1.1;
+  else if(b[y][x]===BLUE)value-=1.1;
+ }
+ for(const g of groups){
+  const sign=g.color===RED?1:-1;
+  value+=sign*Math.min(g.liberties,4)*g.stones.length*.55;
+  if(g.liberties===1){
+   value-=sign*3.8*g.stones.length;
+  }
+ }
+ return value;
+}
+function tacticalValue(b,captured,redExtra,blueExtra){
+ let value=evaluateBoard(b);
+ value+=(captured[BLUE]-captured[RED])*8;
+ const redTotal=scores[RED]+(redExtra||0)+captured[BLUE]-captured[RED];
+ const blueTotal=scores[BLUE]+(blueExtra||0)+captured[RED]-captured[BLUE];
+ if(redTotal>=GOAL)return 100000;
+ if(blueTotal>=GOAL)return -100000;
+ return value;
+}
+function chooseAITarget(){
+ let bestColumn=null;
+ let bestValue=-Infinity;
+
+ // Examina cada columna donde la IA pueda colocar su cubo.
+ for(let x=0;x<W;x++){
+  const y=landingY(board,x);
+  if(y<0)continue;
+
+  const redMove=tryPlacement(board,x,y,RED);
+  if(!redMove.ok)continue;
+
+  const redCaptures=redMove.captured[BLUE]||0;
+  const blueCaptures=redMove.captured[RED]||0;
+
+  // No dejar pasar una victoria inmediata.
+  if(scores[RED]+redCaptures>=GOAL)return x;
+
+  const baseValue=tacticalValue(
+   redMove.board,redMove.captured,0,0
+  );
+
+  let worstReply=Infinity;
+  let foundReply=false;
+
+  // Busca la mejor respuesta posible del jugador azul.
+  for(let bx=0;bx<W;bx++){
+   const by=landingY(redMove.board,bx);
+   if(by<0)continue;
+
+   const blueMove=tryPlacement(redMove.board,bx,by,BLUE);
+   if(!blueMove.ok)continue;
+
+   foundReply=true;
+
+   const replyValue=evaluateBoard(blueMove.board)
+    +(redMove.captured[BLUE]-redMove.captured[RED])*8
+    +(blueMove.captured[BLUE]-blueMove.captured[RED])*8;
+
+   // La IA debe evitar permitir una victoria inmediata del rival.
+   const projectedBlue=scores[BLUE]
+    +redMove.captured[RED]
+    -redMove.captured[BLUE]
+    +blueMove.captured[RED];
+
+   const projectedRed=scores[RED]
+    +redMove.captured[BLUE]
+    -redMove.captured[RED]
+    +blueMove.captured[BLUE];
+
+   let adjusted=replyValue;
+
+   if(projectedBlue>=GOAL)adjusted=-100000;
+   if(projectedRed>=GOAL)adjusted=100000;
+
+   if(adjusted<worstReply)worstReply=adjusted;
+  }
+
+  // Mezcla la posición actual con la respuesta más peligrosa.
+  let value=foundReply
+   ? baseValue*.25+worstReply*.75
+   : baseValue;
+
+  // Premia capturas reales y penaliza perder grupos propios.
+  value+=(redCaptures-blueCaptures)*4;
+
+  // Desempate leve para no repetir siempre la misma columna.
+  value+=Math.random()*.15;
+
+  if(value>bestValue){
+   bestValue=value;
+   bestColumn=x;
+  }
+ }
+
+ // Si no encuentra una jugada válida, conserva una alternativa segura.
+ if(bestColumn===null){
+  for(const x of SPAWN_ORDER){
+   if(!board[0][x])return x;
+  }
+  return piece?piece.x:3;
+ }
+ return bestColumn;
+}
+function prepColumnAvailable(x){
+ return Number.isInteger(x)&&x>=0&&x<W&&!Object.values(prepColumns).includes(x);
+}
+function selectPrepColumn(x){
+ if(!prepPhase||paused||gameOver||currentIsAI())return;
+ if(!prepColumnAvailable(x)){
+  say("Esa columna ya tiene una ficha inicial. Elige otra.");
+  return;
+ }
+ prepSelectedColumn=x;
+ say("Columna "+(x+1)+" seleccionada. Confirma tu ficha inicial.");
+ render();
+}
+function movePrepSelection(dx){
+ if(!prepPhase||paused||gameOver||currentIsAI())return;
+ let x=prepSelectedColumn;
+ if(x===null)x=dx>0?-1:W;
+ for(let i=0;i<W;i++){
+  x+=dx;
+  if(x<0||x>=W)return;
+  if(prepColumnAvailable(x)){selectPrepColumn(x);return;}
+ }
+}
+function confirmPrepPosition(){
+ if(!prepPhase||paused||gameOver||currentIsAI())return;
+ if(!prepColumnAvailable(prepSelectedColumn)){
+  say("Selecciona una columna libre antes de confirmar.");
+  return;
+ }
+ placePrepPiece(prepSelectedColumn,player);
+}
+function placePrepPiece(x,p){
+ if(!prepPhase||!prepColumnAvailable(x))return;
+ board[H-1][x]=p;
+ prepColumns[p]=x;
+ prepSelectedColumn=null;
+ prepIndex++;
+ if(prepIndex>=prepOrder.length){
+  prepPhase=false;
+  $("prep-panel").classList.remove("show");
+  say("Preparación completada. Comienza la partida.");
+  beginTurn(openingPlayer);
+  render();
+  return;
+ }
+ player=prepOrder[prepIndex];
+ say(currentIsAI()?"La IA está preparando su ficha inicial.":"Turno del siguiente jugador. Elige otra columna.");
+ render();
+ if(currentIsAI())performAISetup();
+}
+function performAISetup(){
+ if(!prepPhase||!currentIsAI())return;
+ const col=SPAWN_ORDER.find(x=>prepColumnAvailable(x));
+ if(col!==undefined)placePrepPiece(col,player);
+}
+function startPreparation(winner){
+ openingPlayer=winner;
+ prepPhase=true;
+ prepSelectedColumn=null;
+ prepColumns={[BLUE]:null,[RED]:null};
+ prepOrder=[winner,winner===BLUE?RED:BLUE];
+ prepIndex=0;
+ piece=null;
+ player=prepOrder[0];
+ paused=false;
+ turnWait=0;
+ fallAccumulator=0;
+ aiTarget=null;
+ fastDrop=false;
+ $("pause").textContent="Pausar";
+ $("prep-panel").classList.add("show");
+ say("Preparación inicial: quien ganó los dados elige primero.");
+ render();
+ if(currentIsAI())performAISetup();
+}
+function movePiece(dx){
+ if(!piece||gameOver||paused||currentIsAI())return;
+ const nx=piece.x+dx;
+ if(canOccupy(nx,piece.y)){piece.x=nx;render()}
+}
+function lockPiece(){
+ if(!piece||gameOver)return;
+ const x=piece.x,y=piece.y,p=player;
+ const result=tryPlacement(board,x,y,p);
+ piece=null;
+ if(!result.ok){
+  say(result.suicide?"Jugada anulada: suicidio prohibido. Turno perdido.":"Jugada no válida. Turno perdido.");
+  turnWait=450;return;
+ }
+ board=result.board;
+ const enemy=other(p);
+ const gained=result.captured[enemy]||0;
+ scores[p]+=gained;
+ render();
+ if(scores[p]>=GOAL){endGame(p,"¡"+colorName(p)+" alcanza las "+GOAL+" capturas!");return}
+ if(suddenDeath&&gained>0){endGame(p,"¡Captura decisiva en muerte súbita!");return}
+ if(gained>0)say(colorName(p)+" captura "+gained+" cubo"+(gained===1?"":"s")+".");
+ else say("Cubo colocado. Sin capturas.");
+ if(!hasAnySpawn()){
+  finishByScore("El tablero está bloqueado.");
+  return;
+ }
+ turnWait=550;
+}
+function hasAnySpawn(){return SPAWN_ORDER.some(x=>!board[0][x])}
+function beginTurn(p){
+ if(gameOver)return;
+ player=p;piece=null;turnWait=0;fallAccumulator=0;aiTarget=null;
+ spawnPiece();render();
+}
+function finishByScore(reason){
+ if(scores[BLUE]>scores[RED])endGame(BLUE,reason+" Más capturas acumuladas.");
+ else if(scores[RED]>scores[BLUE])endGame(RED,reason+" Más capturas acumuladas.");
+ else if(reason.includes("bloqueado"))endGame(0,reason+" La puntuación está empatada.");
+ else {suddenDeath=true;say("¡Muerte súbita! La siguiente captura decide la partida.");}
+}
+function endGame(winner,reason){
+ gameOver=true;piece=null;paused=false;
+ $("pause").textContent="Pausar";
+ $("resultTitle").textContent=winner===0?"¡Tablas!":"¡Gana "+colorName(winner)+"!";
+ $("resultText").textContent=reason+" Marcador final: Blanco "+scores[BLUE]+" — Negro "+scores[RED]+".";
+ $("overlay").classList.add("show");
+ say(reason);
+ render();
+}
+function updateClock(){
+ const n=Math.max(0,Math.ceil(remaining));
+ $("time").textContent=String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0");
+ $("clock").classList.toggle("urgent",n<=60);
+}
+function render(){
+ const el=$("board");el.replaceChildren();
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const cell=document.createElement("div");
+  cell.className="cell"+(board[y][x]===BLUE?" blue":board[y][x]===RED?" red":"");
+  if(piece&&piece.x===x&&piece.y===y)cell.classList.add("falling");
+  if(prepPhase&&y===H-1&&x===prepSelectedColumn&&prepColumnAvailable(x))cell.classList.add("prep-preview");
+  cell.setAttribute("aria-label",`Fila ${y+1}, columna ${x+1}`);
+  cell.addEventListener("click",()=>{
+   if(prepPhase){selectPrepColumn(x);return;}
+   if(!piece||gameOver||paused||currentIsAI())return;
+   const dx=x-piece.x;
+   if(dx)movePiece(Math.sign(dx));
+  });
+  el.appendChild(cell);
+ }
+ $("scoreBlue").textContent=scores[BLUE];
+ $("scoreRed").textContent=scores[RED];
+ $("pBlue").classList.toggle("active",!gameOver&&player===BLUE);
+ $("pRed").classList.toggle("active",!gameOver&&player===RED);
+ $("redName").textContent=mode==="ai"?"IA NEGRA":"JUGADOR NEGRO";
+ $("left").disabled=prepPhase?!prepPhase||paused||gameOver||currentIsAI():!piece||paused||gameOver||currentIsAI();
+ $("right").disabled=prepPhase?!prepPhase||paused||gameOver||currentIsAI():!piece||paused||gameOver||currentIsAI();
+ $("down").disabled=prepPhase||!piece||paused||gameOver||currentIsAI();
+ if(prepPhase){
+  $("prep-panel").classList.add("show");
+  $("prep-confirm").disabled=paused||currentIsAI()||!prepColumnAvailable(prepSelectedColumn);
+  $("prep-title").textContent="COLOCACIÓN INICIAL";
+  $("prep-help").textContent="Jugador "+(player===BLUE?"1 (blanco)":"2 (negro)")+": selecciona una columna libre y confirma.";
+ }else{
+  $("prep-panel").classList.remove("show");
+ }
+ updateClock();
+}
+function startDiceRoll(){
+ const overlay=$("dice-overlay");
+ const face1=$("dice-face-1");
+ const face2=$("dice-face-2");
+ const status=$("dice-status");
+ const name1=$("dice-name-1");
+ const name2=$("dice-name-2");
+ const rollId=++diceRollId;
+
+ name1.textContent=mode==="ai"?"TÚ":"JUGADOR 1";
+ name2.textContent=mode==="ai"?"IA":"JUGADOR 2";
+ face1.textContent="⚄";
+ face2.textContent="⚄";
+ face1.classList.remove("rolling");
+ face2.classList.remove("rolling");
+ status.classList.remove("winner");
+ status.textContent="¡Que empiece el duelo!";
+ overlay.classList.add("show");
+
+ function throwAgain(){
+  if(rollId!==diceRollId)return;
+  face1.classList.add("rolling");
+  face2.classList.add("rolling");
+  status.classList.remove("winner");
+  status.textContent="Lanzando los dados...";
+  const animation=setInterval(()=>{
+   if(rollId!==diceRollId){clearInterval(animation);return;}
+   face1.textContent=String(1+Math.floor(Math.random()*6));
+   face2.textContent=String(1+Math.floor(Math.random()*6));
+  },85);
+
+  setTimeout(()=>{
+   clearInterval(animation);
+   if(rollId!==diceRollId)return;
+   const a=1+Math.floor(Math.random()*6);
+   const b=1+Math.floor(Math.random()*6);
+   face1.textContent=String(a);
+   face2.textContent=String(b);
+   face1.classList.remove("rolling");
+   face2.classList.remove("rolling");
+
+   if(a===b){
+    status.textContent="¡Empate! Repetimos el lanzamiento...";
+    setTimeout(throwAgain,950);
+    return;
+   }
+
+   const winner=a>b?BLUE:RED;
+   const winnerName=mode==="ai"
+    ?(winner===BLUE?"¡Empiezas tú!":"¡Empieza la IA!")
+    :"¡Empieza el Jugador "+(winner===BLUE?"1":"2")+"!";
+   status.textContent=winnerName;
+   status.classList.add("winner");
+
+   setTimeout(()=>{
+    if(rollId!==diceRollId)return;
+    overlay.classList.remove("show");
+    paused=false;
+    $("pause").textContent="Pausar";
+    startPreparation(winner);
+    render();
+   },1450);
+  },1450);
+ }
+ throwAgain();
+}
+
+function resetGame(){
+ diceRollId++;
+ board=emptyBoard();piece=null;player=BLUE;scores={[BLUE]:0,[RED]:0};
+$1
+ prepPhase=false;prepSelectedColumn=null;
+ prepColumns={[BLUE]:null,[RED]:null};
+ prepOrder=[];prepIndex=0;openingPlayer=BLUE;remaining=MATCH_SECONDS;gameOver=false;paused=true;
+ suddenDeath=false;turnWait=0;lastFrame=0;fallAccumulator=0;aiTarget=null;
+ fastDrop=false;moveRepeat=0;
+ $("overlay").classList.remove("show");$("pause").textContent="Pausar";
+ say("Decidiendo quién empieza...");
+ render();
+ startDiceRoll();
+}
+function tick(now){
+ requestAnimationFrame(tick);
+ if(!lastFrame)lastFrame=now;
+ const dt=Math.min((now-lastFrame)/1000,.1);lastFrame=now;
+ if(gameOver||paused||prepPhase){return}
+ if(!suddenDeath){
+  remaining-=dt;
+  if(remaining<=0){
+   remaining=0;updateClock();
+   if(scores[BLUE]===scores[RED]){
+    suddenDeath=true;
+    say("¡Tiempo! Empate a puntos. Muerte súbita: la siguiente captura gana.");
+   }else{
+    endGame(scores[BLUE]>scores[RED]?BLUE:RED,"Tiempo agotado.");
+    return;
+   }
+  }
+ }
+ updateClock();
+ if(turnWait>0){
+  turnWait-=dt*1000;
+  if(turnWait<=0&&!gameOver)beginTurn(other(player));
+  return;
+ }
+ if(!piece||gameOver)return;
+ if(currentIsAI()){
+  aiThink+=dt;
+  if(aiTarget!==null&&piece.x!==aiTarget&&aiThink>.11){
+   aiThink=0;
+   const dx=Math.sign(aiTarget-piece.x),nx=piece.x+dx;
+   if(canOccupy(nx,piece.y))piece.x=nx;
+   else aiTarget=piece.x;
+   render();
+  }
+ }
+ fallAccumulator+=dt;
+ const interval=fastDrop?.045:(currentIsAI()?.40:.48);
+ if(fallAccumulator>=interval){
+  fallAccumulator=0;
+  if(canOccupy(piece.x,piece.y+1)){piece.y++}
+  else{lockPiece();return}
+  render();
+ }
+}
+function togglePause(){
+ if(gameOver)return;
+ paused=!paused;
+ $("pause").textContent=paused?"Continuar":"Pausar";
+ say(paused?"Partida pausada.":(suddenDeath?"Muerte súbita: la siguiente captura decide.":lastStatus));
+ render();
+}
+$1$("prep-confirm").addEventListener("click",confirmPrepPosition);
+$1$("left").addEventListener("click",()=>movePiece(-1));
+$("right").addEventListener("click",()=>movePiece(1));
+$("down").addEventListener("pointerdown",()=>{if(!currentIsAI()&&!paused&&!gameOver)fastDrop=true});
+["pointerup","pointercancel","pointerleave"].forEach(ev=>$("down").addEventListener(ev,()=>fastDrop=false));
+$("new").addEventListener("click",resetGame);
+$("again").addEventListener("click",resetGame);
+$("pause").addEventListener("click",togglePause);
+$("mode").addEventListener("change",resetGame);
+document.addEventListener("keydown",e=>{
+ if(!prepPhase)return;
+ const k=e.key.toLowerCase();
+ if(["arrowleft","arrowright"," ","a","d"].includes(k))e.preventDefault();
+ if(e.repeat||gameOver||paused||currentIsAI())return;
+ if(k==="arrowleft"||(mode==="local"&&player===RED&&k==="a"))movePrepSelection(-1);
+ if(k==="arrowright"||(mode==="local"&&player===RED&&k==="d"))movePrepSelection(1);
+ if(k===" ")confirmPrepPosition();
+},true);
+document.addEventListener("keydown",e=>{
+ const k=e.key.toLowerCase();
+ if(["arrowleft","arrowright","arrowdown"," ","a","d","s"].includes(k))e.preventDefault();
+ if(k==="p"&&!e.repeat){togglePause();return}
+ if(e.repeat||!piece||gameOver||paused||currentIsAI())return;
+
+ if(mode==="local"){
+  if(player===BLUE){
+   if(k==="arrowleft")movePiece(-1);
+   if(k==="arrowright")movePiece(1);
+   if(k==="arrowdown")fastDrop=true;
+  }else{
+   if(k==="a")movePiece(-1);
+   if(k==="d")movePiece(1);
+   if(k==="s")fastDrop=true;
+  }
+ }else{
+  if(k==="arrowleft")movePiece(-1);
+  if(k==="arrowright")movePiece(1);
+  if(k==="arrowdown")fastDrop=true;
+ }
+
+ if(k===" "){fastDrop=false;lockPiece()}
+});
+document.addEventListener("keyup",e=>{
+ const k=e.key.toLowerCase();
+ if(k==="arrowdown"||k==="s")fastDrop=false;
+});
+resetGame();
+requestAnimationFrame(tick);
+</script>
+
+</body>
+</html>
+
