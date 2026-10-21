@@ -1,0 +1,15 @@
+﻿# deps
+node_modules/
+# cloudflare
+.wrangler/
+.dev.vars
+# backups
+archive_backups_20261016/
+backup-*/
+*.backup*
+*.bak
+# OS
+.DS_Store
+Thumbs.db
+# logs
+npm-debug.log*
