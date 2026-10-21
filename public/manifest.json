@@ -1,0 +1,34 @@
+{
+  "background_color": "#0a0a0f",
+  "categories": [
+    "games",
+    "strategy"
+  ],
+  "description": "Gravity Go - Multiplayer strategy game",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "icons": [
+    {
+      "purpose": "any maskable",
+      "sizes": "192x192",
+      "src": "./icon-192.png",
+      "type": "image/png"
+    },
+    {
+      "purpose": "any maskable",
+      "sizes": "512x512",
+      "src": "./icon-512.png",
+      "type": "image/png"
+    }
+  ],
+  "lang": "en",
+  "name": "Gravity Go",
+  "orientation": "any",
+  "scope": "./",
+  "short_name": "Gravity Go",
+  "start_url": "./",
+  "theme_color": "#7c3aed"
+}
