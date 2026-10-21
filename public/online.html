@@ -1,0 +1,478 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>GRAVITY GO — ONLINE V9.2 FIX AUDIO</title>
+<style>
+:root{--bg:#070a0f;--panel:#0f1a27;--panel2:#121f30;--line:#1e3350;--line2:#264263;--text:#e8eef8;--muted:#8a9ab5;--gold:#ffcc4d;--win:#b8983a;--blue:#7ec8ff;--red:#ff7a7a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100dvh;width:100vw;overflow:hidden;background:radial-gradient(1200px 600px at 50% -20%, #1a2c45 0%, #070a0f 65%);color:var(--text);font-family:Inter,Segoe UI,system-ui,sans-serif}
+button{font:inherit;cursor:pointer;border:1px solid var(--line2);background:#162334;color:var(--text);border-radius:10px;padding:10px 14px;transition:.15s;touch-action:manipulation}
+button:hover:not(:disabled){border-color:var(--muted);background:#1d3047}
+button.primary{background:linear-gradient(180deg,#214a7a,#17365c);border-color:#2d6aa6;font-weight:700;box-shadow:0 4px 16px rgba(45,106,166,.25)}
+button.primary:hover{filter:brightness(1.12);transform:translateY(-1px)}
+button:disabled{opacity:.35;pointer-events:none}
+#app{display:grid;grid-template-columns:300px 1fr 360px;grid-template-rows:64px 1fr;grid-template-areas:"top top top" "sidebar1 board sidebar2";height:100dvh;gap:1px;background:var(--line)}
+.topbar{grid-area:top;display:grid;grid-template-columns:1fr 200px 1fr;background:#0a121d;border-bottom:1px solid var(--line);z-index:3}
+.player{display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:16px}
+.player.red{flex-direction:row-reverse;text-align:right}
+.pname{font-size:11px;letter-spacing:2px;color:var(--muted);font-weight:800}
+.score{font-size:32px;font-weight:900;line-height:1;min-width:40px;text-align:center}
+.target{font-size:9px;color:var(--muted);opacity:.7;margin-top:2px}
+.player.active{border-bottom:2px solid var(--gold);background:linear-gradient(90deg, rgba(255,204,77,.08), transparent)}
+.player.active.red{background:linear-gradient(270deg, rgba(255,204,77,.08), transparent)}
+.clock{display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0e1b2a;border-left:1px solid var(--line);border-right:1px solid var(--line);gap:2px}
+.clock strong{font-size:28px;letter-spacing:1px;font-variant-numeric:tabular-nums}
+.clock small{font-size:8px;letter-spacing:1.6px;color:var(--muted);font-weight:700}
+.clock.urgent strong{color:#ff5a6a;animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+#sidebar1{grid-area:sidebar1;background:var(--panel);display:flex;flex-direction:column;padding:16px;gap:16px;overflow-y:auto}
+.card{background:linear-gradient(180deg, var(--panel2), #0f1c2b);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.card h3{font-size:10px;letter-spacing:2.2px;color:var(--muted);margin-bottom:12px;font-weight:800}
+.rules{font-size:12px;line-height:1.65;color:var(--muted)} .rules b{color:var(--text)}
+#prep-panel{margin-top:auto;background:linear-gradient(180deg,#1f1c10,#17140c);border:1px solid #d4b55a;border-radius:14px;padding:16px;box-shadow:0 8px 32px rgba(255,204,77,.15);display:none}
+#prep-title{color:var(--gold);font-size:11px;font-weight:900;letter-spacing:1.2px;margin-bottom:8px}
+#prep-help{font-size:12px;color:#d8c08a;line-height:1.4;margin-bottom:12px}
+#prep-confirm{width:100%;min-height:52px;background:var(--gold);color:#111;border:none;font-weight:900;border-radius:10px}
+#center{grid-area:board;background:radial-gradient(800px 600px at 50% 10%, #111f32 0%, #070a0f 70%);display:flex;align-items:center;justify-content:center;padding:12px;position:relative;overflow:hidden}
+.boardwrap{width:min(100%, 480px);height:auto;max-height:calc(100dvh - 88px);aspect-ratio:8/12;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(12,1fr);gap:4px;width:100%;height:100%;background:#0b1625;padding:10px;border-radius:18px;border:1px solid #1a2f4a;box-shadow:0 24px 80px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.04)}
+.cell{background:#1a2c45;border-radius:6px;position:relative;transition:.12s;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.cell:hover{filter:brightness(1.15)}
+.cell.blue::after,.cell.red::after{content:"";position:absolute;inset:4px;border-radius:4px}
+.cell.blue::after{background:radial-gradient(140px 140px at 32% 28%, #fff 0%, #f2ecda 38%, #c9b896 78%, #a8986e 100%);box-shadow:0 2px 6px rgba(0,0,0,.45), inset 0 1px 1px rgba(255,255,255,.8)}
+.cell.red::after{background:radial-gradient(140px 140px at 32% 28%, #4a4a4a 0%, #222 55%, #000 100%);border:1px solid #2a2a2a;box-shadow:0 2px 6px rgba(0,0,0,.6)}
+.cell.falling{outline:2px solid #fff;outline-offset:2px;z-index:2;transform:scale(1.06);box-shadow:0 0 28px rgba(255,255,255,.75)}
+.cell.remote-falling{outline:2px solid var(--gold);outline-offset:2px}
+.cell.selectable{cursor:pointer;background:#223a5a;outline:2px dashed var(--gold)}
+#sidebar2{grid-area:sidebar2;background:var(--panel);display:flex;flex-direction:column;padding:16px;gap:14px;overflow-y:auto}
+.meta-actions{display:grid;gap:10px}
+.meta-actions button{height:46px;text-align:left;padding-left:16px;font-size:12.5px;font-weight:650}
+#statusBox{flex:1;display:flex;flex-direction:column}
+.status{font-size:12.5px;line-height:1.55;min-height:48px;color:var(--text);flex:1}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px}
+.controls button{height:62px;font-size:22px;background:#132233;border-radius:12px}
+#phaseActions{display:grid;gap:10px;margin-top:12px}
+#phaseActions button{width:100%;height:44px}
+#overlay,#reglas-modal,#controls-overlay,#pause-overlay{position:fixed;inset:0;background:rgba(5,8,13,.92);backdrop-filter:blur(14px);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+#overlay.show,#reglas-modal.show,#controls-overlay.show,#pause-overlay.show{display:flex}
+.modal{width:min(440px,100%);background:linear-gradient(180deg,#142236,#101b2a);border:1px solid #2a3f5a;border-radius:22px;padding:28px;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+.modal h2{margin-bottom:12px}
+.modal p{color:var(--muted);line-height:1.5}
+@media(max-width:1100px){#app{grid-template-columns:260px 1fr 320px}}
+@media(max-width:900px){
+  #app{
+    grid-template-columns:1fr;
+    grid-template-rows:64px auto auto auto;
+    grid-template-areas:"top" "board" "sidebar2" "sidebar1";
+    height:auto;
+    min-height:100dvh;
+    overflow:auto;
+    overflow-x:hidden;
+  }
+  html,body{overflow:auto;overflow-x:hidden;height:auto;min-height:100dvh}
+  .topbar{position:sticky;top:0;z-index:10;height:64px}
+  #center{
+    height:auto;
+    min-height:58vh;
+    max-height:none;
+    padding:8px;
+    overflow:visible;
+  }
+  .boardwrap{
+    width:min(92vw, 420px);
+    max-height:none;
+    height:auto;
+    aspect-ratio:8/12;
+  }
+  #board{gap:3px;padding:8px}
+  #sidebar1,#sidebar2{overflow:visible;height:auto}
+  #sidebar1{flex-direction:column}
+  #sidebar2{order:-1}
+  #statusBox .controls button{height:56px;font-size:20px}
+  .meta-actions{grid-template-columns:1fr 1fr}
+  .meta-actions button{height:44px}
+}
+@media(max-width:680px){
+  #app{grid-template-rows:58px auto auto auto;gap:0;background:var(--bg)}
+  .topbar{grid-template-columns:1fr 90px 1fr;height:58px}
+  .player{padding:0 10px;gap:8px}
+  .pname{font-size:9px;letter-spacing:1px}
+  .score{font-size:26px}
+  .target{display:none}
+  .clock{min-width:90px}
+  .clock strong{font-size:22px}
+  .clock small{font-size:7px}
+  #center{padding:6px;min-height:62vh}
+  .boardwrap{width:min(94vw, 360px)}
+  #board{border-radius:14px;gap:2px;padding:6px}
+  .cell{border-radius:4px}
+  #sidebar1,#sidebar2{padding:10px;gap:10px}
+  .card{padding:12px;border-radius:12px}
+  .card h3{font-size:9px;margin-bottom:8px}
+  .rules{font-size:11px;line-height:1.5}
+  .status{font-size:12px}
+  #statusBox .controls{grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+  #statusBox .controls button{height:54px;border-radius:10px}
+  #prep-panel{padding:12px}
+  #prep-title{font-size:10px}
+  #prep-help{font-size:11px}
+  #prep-confirm{min-height:48px;font-size:12px}
+  .modal{padding:20px;border-radius:16px}
+}
+@media(max-width:380px){
+  .topbar{grid-template-columns:1fr 76px 1fr}
+  .player{padding:0 6px}
+  .pname{font-size:8px}
+  .score{font-size:22px}
+  .clock{min-width:76px}
+  .boardwrap{width:96vw}
+  #board{padding:4px;gap:2px}
+  .meta-actions{grid-template-columns:1fr}
+  .meta-actions button{height:42px;font-size:12px}
+}
+@media(max-height:700px) and (max-width:900px){
+  #center{min-height:52vh}
+  .boardwrap{width:min(88vw, 320px)}
+}
+@media(pointer:coarse){
+  .cell{transition:none}
+  .cell:hover{filter:none;transform:none}
+  button:active{transform:scale(.97)}
+}
+@media(max-width:900px){
+  #prep-panel{
+    position:fixed !important;
+    bottom:14px !important;
+    left:50% !important;
+    transform:translateX(-50%) !important;
+    width:min(92vw, 400px) !important;
+    margin:0 !important;
+    z-index:60 !important;
+    padding:14px !important;
+    border-radius:14px !important;
+    background:linear-gradient(180deg, #2a2210, #1a160c) !important;
+    border:1px solid #d4b55a !important;
+    box-shadow:0 16px 48px rgba(0,0,0,.7), 0 0 0 1px rgba(255,204,77,.25) !important;
+    display:none;
+  }
+  #center{
+    padding-bottom:86px !important;
+  }
+}
+@media(max-width:680px){
+  #prep-panel{
+    bottom:10px !important;
+    width:min(94vw, 360px) !important;
+    padding:12px !important;
+  }
+  #prep-title{font-size:10px !important; margin-bottom:6px !important}
+  #prep-help{font-size:11px !important; margin-bottom:10px !important}
+  #prep-confirm{height:48px !important; font-size:13px !important}
+}
+</style>
+<script>
+/* === SFX SYSTEM V9.2 - FIX AUDIO UNLOCK === */
+let audioCtx=null;
+let audioUnlocked=false;
+function ensureCtx(){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    return audioCtx;
+  }catch(e){ console.log('AudioContext creation failed',e); return null; }
+}
+function unlockAudio(){
+  const ctx = ensureCtx();
+  if(!ctx) return null;
+  if(ctx.state === 'suspended'){
+    ctx.resume().then(()=>{ audioUnlocked=true; console.log('Audio unlocked, state',ctx.state); }).catch(e=>console.log('resume failed',e));
+  } else {
+    audioUnlocked=true;
+  }
+  // silent blip to unlock iOS
+  try{
+    const buf = ctx.createBuffer(1,1,22050);
+    const src = ctx.createBufferSource();
+    src.buffer=buf;
+    src.connect(ctx.destination);
+    src.start(0);
+  }catch{}
+  return ctx;
+}
+function getCtxForPlay(){
+  const ctx = ensureCtx();
+  if(!ctx) return null;
+  if(ctx.state === 'suspended'){
+    // try resume and return null for this frame, will replay after
+    ctx.resume().then(()=>{ audioUnlocked=true; });
+    return null; // skip this sound, next interaction will work
+  }
+  return ctx;
+}
+function tone(f,dur,vol=0.2,type='sine',f2=null){
+  try{
+    let ctx = getCtxForPlay();
+    if(!ctx){
+      // first gesture: unlock and schedule retry of this tone
+      ctx = unlockAudio();
+      if(!ctx || ctx.state !== 'running'){
+        // schedule retry in 150ms
+        setTimeout(()=>tone(f,dur,vol,type,f2), 160);
+        return;
+      }
+    }
+    const o=ctx.createOscillator(); 
+    const g=ctx.createGain();
+    o.type=type;
+    o.frequency.setValueAtTime(f,ctx.currentTime);
+    if(f2) o.frequency.exponentialRampToValueAtTime(f2,ctx.currentTime+dur);
+    g.gain.setValueAtTime(vol,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime+dur);
+  }catch(e){ console.log('tone err',e); }
+}
+const SFX={
+  click:()=>tone(800,0.08,0.14,'sine',1150),
+  clickSoft:()=>tone(600,0.06,0.09,'sine',800),
+  move:()=>tone(360,0.09,0.12,'sine',620),
+  down:()=>tone(200,0.11,0.16,'triangle',110),
+  place:()=>{ tone(180,0.14,0.22,'sine',85); setTimeout(()=>tone(90,0.18,0.18,'sine'),55); },
+  capture:()=>{ tone(620,0.11,0.18,'sine',920); setTimeout(()=>tone(920,0.16,0.16,'sine',1320),75); },
+  captureBig:()=>{ [0,1,2].forEach(i=>setTimeout(()=>tone(480+i*180,0.14,0.18,'sine',750+i*220), i*70)); },
+  confirm:()=>{ tone(620,0.09,0.16,'sine',1020); setTimeout(()=>tone(1020,0.19,0.16,'sine',1480),85); },
+  dice:()=>{ for(let i=0;i<7;i++) setTimeout(()=>tone(180+Math.random()*380,0.09,0.11,'square'), i*55); },
+  diceWin:()=>{ tone(440,0.12,0.16,'sine',660); setTimeout(()=>tone(660,0.22,0.16,'sine',880),110); },
+  win:()=>{ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,0.32,0.17,'sine'), i*120)); },
+  lose:()=>{ tone(220,0.45,0.19,'sawtooth',90); },
+  pause:()=>tone(420,0.13,0.13,'sine',310),
+  unpause:()=>tone(310,0.13,0.13,'sine',520),
+  searching:()=>tone(400,0.18,0.10,'triangle',600),
+  found:()=>{ tone(400,0.12,0.15,'sine',700); setTimeout(()=>tone(700,0.22,0.15,'sine',1000),120); },
+  yourTurn:()=>tone(700,0.09,0.12,'sine',950),
+  error:()=>tone(140,0.22,0.16,'sawtooth',80),
+};
+// Unlock on real user gestures
+['click','touchstart','touchend','keydown'].forEach(ev=>{
+  window.addEventListener(ev, ()=>{ unlockAudio(); }, {once:false, passive:true});
+});
+console.log('SFX V9.2 ready - toca para desbloquear audio');
+</script>
+</head>
+<body>
+<div id="app">
+<section class="topbar">
+<div id="pBlue" class="player blue"><div><div class="pname">JUGADOR 1</div><div class="target">OBJETIVO: 20 CAPTURAS</div></div><div class="score" id="scoreBlue">0</div></div>
+<div class="clock" id="clock"><small>TIEMPO</small><strong id="time">10:00</strong><small>POR PARTIDA</small></div>
+<div id="pRed" class="player red"><div class="score" id="scoreRed">0</div><div><div class="pname">JUGADOR 2</div><div class="target">OBJETIVO: 20 CAPTURAS</div></div></div>
+</section>
+<aside id="sidebar1">
+<div class="card"><h3>REGLAS</h3><div class="rules"><b>Gravity Go:</b> Go + Tetris.<br><br>1. El cubo cae. Muevelo<br>2. Grupos sin libertades capturados<br>3. Gravedad tras captura<br>4. 20 capturas = victoria<br><br>Combos en cascada.</div></div>
+<div id="prep-panel"><div id="prep-title">ELIGE COLUMNA INICIAL</div><p id="prep-help">Selecciona una columna libre en el tablero.</p></div>
+</aside>
+<main id="center"><div class="boardwrap"><div id="board"></div></div></main>
+<aside id="sidebar2">
+<div class="meta-actions">
+<button id="find" class="primary">◉ BUSCAR RIVAL</button>
+<button id="cancel" disabled>✕ CANCELAR BÚSQUEDA</button>
+<button id="btn-reglas">📖 REGLAS</button>
+<button id="to-menu">⌂ INICIO</button>
+</div>
+<div class="card" id="statusBox">
+<h3>ESTADO</h3>
+<div class="status" id="status">Pulsa «Buscar rival» para encontrar una partida.</div>
+<div id="phaseActions">
+<button id="rollDice" class="primary" hidden>🎲 TIRAR LOS DADOS</button>
+<button id="surrender" hidden style="background:#55212c;border-color:#9e3448">🏳 RENDIRSE</button>
+</div>
+<div class="controls"><button id="left">←</button><button id="down">↓</button><button id="right">→</button></div>
+</div>
+<div class="card">
+<h3>PARTIDA ONLINE</h3>
+<div class="rules">Servidor: <b>GameHub Durable Object</b><br>Matchmaking por WebSocket <code>/ws</code><br>Funciona con 2 pestañas.</div>
+</div>
+</aside>
+</div>
+<div id="overlay"><div class="modal"><h2 id="resultTitle">Fin</h2><p id="resultText"></p><br><button id="again" class="primary" style="width:100%;height:46px">Jugar otra vez</button><button onclick="location.href='index.html'" style="width:100%;margin-top:8px">Menú</button></div></div>
+<div id="pause-overlay"><div class="modal"><h2>EN PAUSA</h2><br><button id="pause-continue" class="primary" style="width:100%;height:46px">▶ CONTINUAR</button><br><br><button id="pause-controls" style="width:100%;height:44px;margin-bottom:10px">🎮 CONTROLES</button><button id="pause-to-menu" style="width:100%">⌂ MENU PRINCIPAL</button></div></div>
+<div id="controls-overlay"><div class="modal"><h2>CONTROLES</h2><br><div style="text-align:left;font-size:13px;line-height:1.7;color:var(--muted)"><b style="color:var(--text)">TECLADO</b><br>← → : mover cubo<br>↓ : acelerar caída<br>ESPACIO : fijar pieza<br>P : pausar<br><br><b style="color:var(--text)">TÁCTIL</b><br>Toca columna para mover<br>Botones ← ↓ →<br><br><b style="color:var(--text)">ONLINE</b><br>El servidor valida todo.<br>Tu rival ve tu movimiento en tiempo real.</div><br><button id="controls-close" class="primary" style="width:100%;height:44px">VOLVER</button></div></div>
+<div id="reglas-modal"><div class="modal"><button id="cerrar-reglas" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--gold);font-size:22px;cursor:pointer">✕</button><h3 style="color:var(--gold);margin-bottom:12px">REGLAS DE VICTORIA</h3><div style="text-align:left;font-size:13px;line-height:1.6;color:var(--muted)"><p><b style="color:var(--text)">Dados:</b> ambos tiran, el más alto empieza. Empate = repetir.</p><p><b style="color:var(--text)">Colocación inicial:</b> cada jugador elige columna distinta.</p><p><b style="color:var(--text)">20 capturas:</b> victoria inmediata.</p><p><b style="color:var(--text)">10 minutos:</b> gana quien tenga más capturas.</p><p><b style="color:var(--text)">Empate:</b> muerte súbita, siguiente captura decide.</p><p><b style="color:var(--text)">Gravedad:</b> grupos sin libertades desaparecen y el resto cae.</p></div><br><button id="cerrar-reglas2" class="primary" style="width:100%">ENTENDIDO</button></div></div>
+<script>
+"use strict";
+const W=8,H=12,BLUE=1,RED=2;
+const $=id=>document.getElementById(id);
+let socket=null;let ownColor=0;let board=Array.from({length:H},()=>Array(W).fill(0));let piece=null;let remotePiece=null;let currentPlayer=0;let scores=[0,0,0];let gameStarted=false;let gameOver=false;let searching=false;let connecting=false;let phase="idle";let diceRolls={[BLUE]:null,[RED]:null};let diceRound=1;let setupPlaced={[BLUE]:false,[RED]:false};let setupPlayer=null;let serverRemaining=600;let stateReceivedAt=Date.now();let suddenDeath=false;let lastMessage="Pulsa Buscar rival para encontrar una partida.";let downInputActive=false;let downHoldActive=false;let downHoldTimer=null;let paused=false;
+function say(m){if(!m)return;lastMessage=m;$("status").textContent=m}
+function colorName(p){return p===BLUE?"Azul":"Rojo"}
+function other(p){return p===BLUE?RED:BLUE}
+function updateClock(){const elapsed=phase==="playing"?(Date.now()-stateReceivedAt)/1000:0;const n=Math.max(0,Math.ceil(serverRemaining-elapsed));$("time").textContent=String(Math.floor(n/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0");$("clock").classList.toggle("urgent",n<=60&&phase==="playing")}
+function sendMessage(d){if(!socket||socket.readyState!==WebSocket.OPEN){say("No hay conexion con el servidor.");return false}socket.send(JSON.stringify(d));return true}
+function canControl(){return gameStarted&&!gameOver&&phase==="playing"&&currentPlayer===ownColor&&!!piece&&socket&&socket.readyState===WebSocket.OPEN&&!paused}
+function sendControl(a){if(!canControl())return;sendMessage({type:"control",action:a})}
+function movePiece(dx){if(!canControl())return;try{SFX.move()}catch{};sendControl(dx<0?"left":"right")}
+function chooseColumn(x){if(!gameStarted||gameOver||phase!=="setup")return;if(setupPlayer!==ownColor||setupPlaced[ownColor]){try{SFX.error()}catch{};say("Espera a que te toque elegir.");return}try{SFX.confirm()}catch{};sendMessage({type:"choose_column",x})}
+let boardCells=[];
+function ensureBoardCells(){
+ const el=$("board");
+ if(boardCells.length===W*H) return;
+ el.replaceChildren();
+ boardCells=[];
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const cell=document.createElement("div");
+  cell.dataset.x=x;cell.dataset.y=y;
+  cell.addEventListener("click",()=>{
+   const cx=parseInt(cell.dataset.x);
+   if(phase==="setup"){chooseColumn(cx);return}
+   if(canControl()&&piece&&cx!==piece.x)movePiece(Math.sign(cx-piece.x));
+  });
+  el.appendChild(cell);
+  boardCells.push(cell);
+ }
+}
+function render(){
+ ensureBoardCells();
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const idx=y*W+x;
+  const cell=boardCells[idx];
+  let cls="cell"+(board[y][x]===BLUE?" blue":board[y][x]===RED?" red":"");
+  if(piece&&piece.x===x&&piece.y===y)cls+=" falling";
+  if(remotePiece&&remotePiece.x===x&&remotePiece.y===y)cls+=" remote-falling "+(remotePiece.color===BLUE?"blue":"red");
+  if(phase==="setup"&&setupPlayer===ownColor&&!setupPlaced[ownColor]&&y===H-1&&board[y][x]===0)cls+=" selectable";
+  cell.className=cls;
+ }
+ $("scoreBlue").textContent=scores[BLUE]||0;
+ $("scoreRed").textContent=scores[RED]||0;
+ $("pBlue").classList.toggle("active",!gameOver&&currentPlayer===BLUE);
+ $("pRed").classList.toggle("active",!gameOver&&currentPlayer===RED);
+ $("find").disabled=searching||connecting||gameStarted;
+ $("cancel").disabled=!searching;
+ $("rollDice").hidden=!(gameStarted&&phase==="dice"&&diceRolls[ownColor]===null&&!gameOver);
+ $("rollDice").disabled=!socket||socket.readyState!==WebSocket.OPEN;
+ $("rollDice").textContent=diceRound>1?"Volver a tirar":"Tirar los dados";
+ $("surrender").hidden=!gameStarted||gameOver||phase==="over";
+ $("left").disabled=!canControl();
+ $("right").disabled=!canControl();
+ $("down").disabled=!canControl();
+ if(phase==="setup"&&setupPlayer===ownColor&&!setupPlaced[ownColor]){$("prep-panel").style.display="block"}else{$("prep-panel").style.display="none"}
+ updateClock();
+}
+let prevScores=[0,0,0];
+function handleState(data){
+ board=data.board||board;scores=data.scores||scores;currentPlayer=data.player||0;phase=data.phase||phase;gameOver=!!data.gameOver;suddenDeath=!!data.suddenDeath;serverRemaining=Number.isFinite(data.remaining)?data.remaining:serverRemaining;stateReceivedAt=Date.now();diceRolls=data.diceRolls||diceRolls;diceRound=data.diceRound||1;setupPlaced=data.setupPlaced||setupPlaced;setupPlayer=data.setupPlayer||null;
+ const active=data.activePiece&&Number.isInteger(data.activePiece.x)&&Number.isInteger(data.activePiece.y)?{x:data.activePiece.x,y:data.activePiece.y,color:currentPlayer}:null;
+ if(phase==="playing"&&!gameOver){
+  if(currentPlayer===ownColor){piece=active?{x:active.x,y:active.y}:null;remotePiece=null}else{piece=null;remotePiece=active}
+ }else{piece=null;remotePiece=null}
+ if(data.message)say(data.message);
+ else if(phase==="dice"){
+  const mine=diceRolls[ownColor];const theirs=diceRolls[other(ownColor)];
+  if(mine!==null&&theirs===null)say("Has sacado "+mine+". Esperando rival...");
+  else if(mine===null&&theirs!==null)say("Rival sacó "+theirs+". Te toca tirar.");
+  else say(diceRound>1?"Empate. Volved a tirar.":"Tirad los dados para decidir quien empieza.");
+ }else if(phase==="setup"){
+  if(setupPlayer===ownColor)say("Te toca elegir columna libre.");else say("Rival eligiendo columna...");
+ }else if(phase==="playing"){
+  say(currentPlayer===ownColor?(suddenDeath?"Muerte súbita: siguiente captura decide. Tu turno.":"Tu turno."): "Turno del rival...");
+ }
+ try{ const curB=scores[BLUE]||0, curR=scores[RED]||0, prevB=prevScores[BLUE]||0, prevR=prevScores[RED]||0; if(data.scores && (data.scores[BLUE]>prevB || data.scores[RED]>prevR)){ if((data.scores[BLUE]-prevB)>=2 || (data.scores[RED]-prevR)>=2) SFX.captureBig(); else SFX.capture(); } if(data.player && data.player!==currentPlayer){ if(data.player===ownColor) SFX.yourTurn(); } prevScores = data.scores ? [...data.scores] : prevScores; }catch{}
+ if(gameOver){
+  piece=null;remotePiece=null;
+  const winner=data.winner;
+  $("resultTitle").textContent=winner===0?"¡Empate!":"¡Gana "+colorName(winner)+"!";
+  $("resultText").textContent=(data.reason||"Partida finalizada")+" | Azul "+(scores[BLUE]||0)+" - Rojo "+(scores[RED]||0);
+  $("overlay").classList.add("show");
+ }else{$("overlay").classList.remove("show")}
+ render();
+}
+function resetClient(){
+ ownColor=0;board=Array.from({length:H},()=>Array(W).fill(0));piece=null;remotePiece=null;currentPlayer=0;scores=[0,0,0];gameStarted=false;gameOver=false;searching=false;connecting=false;phase="idle";diceRolls={[BLUE]:null,[RED]:null};diceRound=1;setupPlaced={[BLUE]:false,[RED]:false};setupPlayer=null;serverRemaining=600;stateReceivedAt=Date.now();suddenDeath=false;paused=false;render();
+}
+function connectAndFind(){
+ if(gameStarted||searching||connecting)return;
+ if(socket&&socket.readyState===WebSocket.OPEN){searching=true;sendMessage({type:"find"});say("Buscando rival...");render();return}
+ connecting=true;say("Conectando al servidor...");render();
+ const protocol=location.protocol==="https:"?"wss:":"ws:";
+ socket=new WebSocket(protocol+"//"+location.host+"/ws");
+ socket.addEventListener("open",()=>{connecting=false;searching=true;sendMessage({type:"find"});say("Buscando rival...");render()});
+ socket.addEventListener("message",event=>{
+  let data;try{data=JSON.parse(event.data)}catch{say("Respuesta no válida del servidor.");return}
+  if(data.type==="searching"){searching=true;say("Buscando rival. Deja esta página abierta...");try{SFX.searching()}catch{};render()}
+  else if(data.type==="match_found"){searching=false;connecting=false;ownColor=data.color;gameStarted=true;gameOver=false;phase="dice";piece=null;remotePiece=null;say("¡Rival encontrado! Preparando dados...");try{SFX.found()}catch{};render()}
+  else if(data.type==="state"){if(!gameStarted&&data.phase!=="idle")return;handleState(data)}
+  else if(data.type==="piece_motion"){
+   if(!gameStarted||gameOver||phase!=="playing")return;
+   if(!Number.isInteger(data.x)||!Number.isInteger(data.y)||data.x<0||data.x>=W||data.y<0||data.y>=H)return;
+   if(data.color===ownColor){piece={x:data.x,y:data.y};remotePiece=null}else{piece=null;remotePiece={x:data.x,y:data.y,color:data.color}}
+   render();
+  }
+  else if(data.type==="search_cancelled"){searching=false;say("Búsqueda cancelada.");render()}
+  else if(data.type==="error"){say(data.message||"Error del servidor.");render()}
+  else if(data.type==="already_matched"){say("Ya estás en una partida.")}
+  else if(data.type==="pong"){}
+ });
+ socket.addEventListener("close",()=>{
+  const wasPlaying=gameStarted;searching=false;connecting=false;gameStarted=false;gameOver=false;piece=null;remotePiece=null;phase="idle";
+  say(wasPlaying?"Conexión cerrada. Partida interrumpida.":"Conexión cerrada. Pulsa Buscar rival.");
+  render();
+ });
+ socket.addEventListener("error",()=>{connecting=false;say("No se pudo conectar. Comprueba servidor.");render()});
+}
+function cancelSearch(){if(!searching)return;sendMessage({type:"cancel_search"});searching=false;say("Cancelando búsqueda...");render()}
+function beginDownInput(){if(downInputActive||!canControl())return;downInputActive=true;downHoldActive=false;downHoldTimer=setTimeout(()=>{downHoldTimer=null;if(!downInputActive)return;downHoldActive=true;sendControl("down_start")},140)}
+function endDownInput(){if(!downInputActive)return;downInputActive=false;if(downHoldTimer!==null){clearTimeout(downHoldTimer);downHoldTimer=null}if(downHoldActive)sendControl("down_stop");else sendControl("down_step");downHoldActive=false}
+function togglePause(){if(gameOver||!gameStarted)return;paused=!paused;$("pause-overlay").classList.toggle("show",paused)}
+function showControls(){$("controls-overlay").classList.add("show")}
+function hideControls(){$("controls-overlay").classList.remove("show")}
+$("find").addEventListener("click",connectAndFind);
+$("cancel").addEventListener("click",cancelSearch);
+$("rollDice").addEventListener("click",()=>{if(!gameStarted||phase!=="dice"||diceRolls[ownColor]!==null)return;sendMessage({type:"roll_dice"});say("Has lanzado el dado...");$("rollDice").disabled=true});
+$("surrender").addEventListener("click",()=>{if(!gameStarted||gameOver)return;if(confirm("¿Seguro que quieres rendirte?")){sendMessage({type:"surrender"});say("Has solicitado rendición...");$("surrender").disabled=true}});
+$("left").addEventListener("click",()=>movePiece(-1));
+$("right").addEventListener("click",()=>movePiece(1));
+const downButton=$("down");
+downButton.addEventListener("pointerdown",e=>{e.preventDefault();if(downButton.setPointerCapture){try{downButton.setPointerCapture(e.pointerId)}catch{}}beginDownInput()});
+["pointerup","pointercancel","lostpointercapture"].forEach(n=>{downButton.addEventListener(n,endDownInput)});
+$("to-menu").addEventListener("click",()=>{window.location.href="index.html"});
+$("again").addEventListener("click",()=>{$("overlay").classList.remove("show");resetClient();connectAndFind()});
+$("btn-reglas").addEventListener("click",()=>{$("reglas-modal").classList.add("show")});
+$("cerrar-reglas").addEventListener("click",()=>{$("reglas-modal").classList.remove("show")});
+$("cerrar-reglas2").addEventListener("click",()=>{$("reglas-modal").classList.remove("show")});
+$("reglas-modal").addEventListener("click",e=>{if(e.target.id==="reglas-modal")e.target.classList.remove("show")});
+$("pause-controls").addEventListener("click",showControls);
+$("controls-close").addEventListener("click",hideControls);
+$("pause-continue").addEventListener("click",togglePause);
+$("pause-to-menu").addEventListener("click",()=>{location.href="index.html"});
+document.addEventListener("keydown",e=>{
+ if(["ArrowLeft","ArrowRight","ArrowDown"," "].includes(e.key))e.preventDefault();
+ if(e.repeat)return;
+ if(e.key==="ArrowLeft")movePiece(-1);
+ if(e.key==="ArrowRight")movePiece(1);
+ if(e.key==="ArrowDown")beginDownInput();
+ if(e.key.toLowerCase()==="p")togglePause();
+});
+document.addEventListener("keyup",e=>{if(e.key==="ArrowDown")endDownInput()});
+window.addEventListener("blur",endDownInput);
+setInterval(updateClock,250);
+setInterval(()=>{if(socket&&socket.readyState===WebSocket.OPEN)sendMessage({type:"ping"})},1500);
+render();
+</script>
+<script>
+(() => {
+  const ids=["find","cancel","btn-reglas","to-menu","rollDice","surrender","left","right","down","again","pause-continue","pause-controls","pause-to-menu","controls-close","cerrar-reglas","cerrar-reglas2"];
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('click', ()=>{
+      try{
+        if(id==="left"||id==="right") return;
+        if(id==="down") SFX.down();
+        else if(id==="rollDice") SFX.dice();
+        else SFX.clickSoft();
+      }catch{}
+    });
+  });
+})();
+</script>
+</body>
+</html>
