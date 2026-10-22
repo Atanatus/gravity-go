@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>GRAVITY GO — REWORK V9 FINAL CON SONIDOS</title>
+<title>GRAVITY GO — REWORK V9 FINAL CON SONIDOS EN PAUSA</title>
 <style>
 :root{--bg:#070a0f;--panel:#0f1a27;--panel2:#121f30;--line:#1e3350;--line2:#264263;--text:#e8eef8;--muted:#8a9ab5;--gold:#ffcc4d;--win:#b8983a}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -50,6 +50,8 @@ button:disabled{opacity:.35;pointer-events:none}
 #sidebar2{grid-area:sidebar2;background:var(--panel);display:flex;flex-direction:column;padding:16px;gap:14px;overflow-y:auto;overflow-x:hidden}
 .meta-actions{display:grid;gap:10px}
 .meta-actions button{height:46px;text-align:left;padding-left:16px;font-size:12.5px;font-weight:650;letter-spacing:.2px;border-radius:10px}
+#speedToggle.active{background:linear-gradient(180deg,#3a2a10,#2a1e0c);border-color:var(--gold);color:var(--gold);box-shadow:0 0 12px rgba(255,204,77,.25)}
+#speedToggle{transition:.15s}
 #statusBox{flex:1;display:flex;flex-direction:column}
 .status{font-size:12.5px;line-height:1.55;min-height:48px;color:var(--text);flex:1}
 .controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px}
@@ -62,6 +64,9 @@ button:disabled{opacity:.35;pointer-events:none}
 .dice-arena{display:flex;justify-content:center;gap:28px;margin:22px 0;align-items:center}
 .dice-face{width:76px;height:76px;background:#fff;color:#111;display:grid;place-items:center;font-size:34px;font-weight:900;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.4)}
 @media(max-width:1100px){#app{grid-template-columns:260px 1fr 320px}}
+@media(max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:68px 1fr auto auto;grid-template-areas:"top" "board" "sidebar1" "sidebar2";overflow:auto}html,body{overflow:auto;height:auto}.topbar{position:sticky;top:0}#center{height:min(78vh,680px)}#sidebar1{flex-direction:row;flex-wrap:wrap}#sidebar1 .card{flex:1 1 200px}#prep-panel{flex:1 1 280px;margin-top:0}}
+
+/* === MOBILE POLISH V7 - NO ROMPE DESKTOP === */
 @media(max-width:900px){
   #app{
     grid-template-columns:1fr;
@@ -95,6 +100,7 @@ button:disabled{opacity:.35;pointer-events:none}
   .meta-actions{grid-template-columns:1fr 1fr}
   .meta-actions button{height:44px}
 }
+
 @media(max-width:680px){
   #app{grid-template-rows:58px auto auto auto;gap:0;background:var(--bg)}
   .topbar{grid-template-columns:1fr 90px 1fr;height:58px}
@@ -122,6 +128,7 @@ button:disabled{opacity:.35;pointer-events:none}
   #prep-confirm{min-height:48px;font-size:12px}
   .modal{padding:20px;border-radius:16px}
 }
+
 @media(max-width:380px){
   .topbar{grid-template-columns:1fr 76px 1fr}
   .player{padding:0 6px}
@@ -133,15 +140,21 @@ button:disabled{opacity:.35;pointer-events:none}
   .meta-actions{grid-template-columns:1fr}
   .meta-actions button{height:42px;font-size:12px}
 }
+
 @media(max-height:700px) and (max-width:900px){
   #center{min-height:52vh}
   .boardwrap{width:min(88vw, 320px)}
 }
+
+/* Touch polish */
 @media(pointer:coarse){
   .cell{transition:none}
   .cell:hover{filter:none;transform:none}
   button:active{transform:scale(.97)}
 }
+
+
+/* === FIX V8 - CONFIRMAR COLUMNA OVERLAY EN MÓVIL === */
 @media(max-width:900px){
   #prep-panel{
     position:fixed !important;
@@ -158,10 +171,14 @@ button:disabled{opacity:.35;pointer-events:none}
     box-shadow:0 16px 48px rgba(0,0,0,.7), 0 0 0 1px rgba(255,204,77,.25) !important;
     display:none;
   }
+  #prep-panel[style*="block"], #prep-panel:not([style*="none"]) {
+    /* cuando JS lo pone en block, se ve flotante */
+  }
   #center{
     padding-bottom:86px !important;
   }
 }
+
 @media(max-width:680px){
   #prep-panel{
     bottom:10px !important;
@@ -172,7 +189,25 @@ button:disabled{opacity:.35;pointer-events:none}
   #prep-help{font-size:11px !important; margin-bottom:10px !important}
   #prep-confirm{height:48px !important; font-size:13px !important}
 }
+
+
+/* FIX MOBILE ORDER: tablero - controles - menu (vs IA y local) */
+@media(max-width:900px){
+  #sidebar2{display:flex !important;flex-direction:column !important}
+  #sidebar2 #statusBox{order:1 !important}
+  #sidebar2 .meta-actions{order:2 !important}
+  #center{order:0}
+  #statusBox .controls{position:sticky;bottom:0;z-index:2;background:linear-gradient(180deg, var(--panel2), #0f1c2b);padding-top:8px}
+}
+
 </style>
+
+
+
+
+
+
+
 <script>
 /* === SFX SYSTEM V9.2 - FIX AUDIO UNLOCK === */
 let audioCtx=null;
@@ -260,10 +295,7 @@ const SFX={
 });
 console.log('SFX V9.2 ready - toca para desbloquear audio');
 </script>
-<link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#7c3aed">
-<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
-<link rel="apple-touch-icon" href="./icon-512.png">
+
 </head>
 <body>
 <div id="app">
@@ -278,7 +310,7 @@ console.log('SFX V9.2 ready - toca para desbloquear audio');
 </aside>
 <main id="center"><div class="boardwrap"><div id="board"></div></div></main>
 <aside id="sidebar2">
-<div class="meta-actions"><button id="new" class="primary">▶ NUEVA PARTIDA</button><button id="menu-btn">☰ MENU PRINCIPAL</button><button id="find-rival" onclick="location.href='online.html'">◉ BUSCAR RIVAL (ONLINE)</button><button id="pause">⏸ PAUSAR / REANUDAR</button></div>
+<div class="meta-actions"><button id="new" class="primary">▶ NUEVA PARTIDA</button><button id="menu-btn">☰ MENU PRINCIPAL</button><button id="find-rival" onclick="location.href='online.html'">◉ BUSCAR RIVAL (ONLINE)</button><button id="pause">⏸ PAUSAR / REANUDAR</button><button id="speedToggle" title="Doble velocidad">⚡ x2 VELOCIDAD</button></div>
 <div class="card" id="statusBox"><h3>ESTADO / CONTROLES</h3><div class="status" id="status">Elige modo de juego.</div><div class="controls"><button id="left">←</button><button id="down">↓</button><button id="right">→</button></div></div>
 </aside>
 </div>
@@ -290,7 +322,7 @@ console.log('SFX V9.2 ready - toca para desbloquear audio');
 <script>
 "use strict";
 const W=8,H=12,GOAL=20,MATCH_SECONDS=600;const BLUE=1,RED=2;const SPAWN_ORDER=[3,4,2,5,1,6,0,7];
-const $=id=>document.getElementById(id);let board,piece,player,scores,mode,remaining,gameOver,paused,suddenDeath;let lastFrame=0,fallAccumulator=0,turnWait=0,aiTarget=null,aiThink=0;let lastStatus="",fastDrop=false;let diceRollId=0;let prepPhase=false,prepSelectedColumn=null,prepOrder=[],prepIndex=0,openingPlayer=BLUE;let prepColumns={[BLUE]:null,[RED]:null};
+const $=id=>document.getElementById(id);let board,piece,player,scores,mode,remaining,gameOver,paused,suddenDeath;let lastFrame=0,fallAccumulator=0,turnWait=0,aiTarget=null,aiThink=0;let lastStatus="",fastDrop=false;let speedX2=false;let diceRollId=0;let prepPhase=false,prepSelectedColumn=null,prepOrder=[],prepIndex=0,openingPlayer=BLUE;let prepColumns={[BLUE]:null,[RED]:null};
 function say(s){lastStatus=s;$("status").textContent=s}function currentIsAI(){return mode==="ai"&&player===RED}function other(p){return p===BLUE?RED:BLUE}function colorName(p){return p===BLUE?"Blanco":"Negro"}function cloneBoard(b){return b.map(r=>r.slice())}function emptyBoard(){return Array.from({length:H},()=>Array(W).fill(0))}function inBounds(x,y){return x>=0&&x<W&&y>=0&&y<H}function neighbors(x,y){return [[x-1,y],[x+1,y],[x,y-1],[x,y+1]].filter(([a,b])=>inBounds(a,b))}
 function groupsOf(b){const seen=Array.from({length:H},()=>Array(W).fill(false)),g=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!b[y][x]||seen[y][x])continue;const c=b[y][x],st=[[x,y]],stones=[],lib=new Set();seen[y][x]=true;while(st.length){const [a,d]=st.pop();stones.push([a,d]);for(const [nx,ny] of neighbors(a,d)){if(!b[ny][nx])lib.add(ny*W+nx);else if(b[ny][nx]===c&&!seen[ny][nx]){seen[ny][nx]=true;st.push([nx,ny])}}}g.push({color:c,stones,liberties:lib.size});}return g;}
 function settle(b){let cap=[0,0,0],ch=true,loops=0;while(ch&&loops++<H*W){ch=false;const groups=groupsOf(b),rem=[];for(const gg of groups)if(gg.liberties===0)rem.push(...gg.stones.map(([x,y])=>[x,y,gg.color]));if(rem.length){ch=true;for(const [x,y,c] of rem){if(b[y][x]===c){b[y][x]=0;cap[c]++}}}if(ch){for(let x=0;x<W;x++){const stack=[];for(let y=H-1;y>=0;y--)if(b[y][x])stack.push(b[y][x]);for(let y=H-1;y>=0;y--)b[y][x]=stack[H-1-y]||0;}}}return cap;}
@@ -340,33 +372,29 @@ function startDiceRoll(){try{SFX.dice()}catch{};const ov=$("dice-overlay");const
 function showMainMenu(){diceRollId++;paused=true;prepPhase=false;fastDrop=false;board=emptyBoard();scores={[BLUE]:0,[RED]:0};remaining=MATCH_SECONDS;gameOver=false;suddenDeath=false;turnWait=0;fallAccumulator=0;piece=null;player=BLUE;prepColumns={[BLUE]:null,[RED]:null};$("dice-overlay").classList.remove("show");$("pause-overlay").classList.remove("show");$("overlay").classList.remove("show");$("prep-panel").style.display="none";$("main-menu").classList.add("show");say("Elige modo de juego.");render();}
 function launchFromMenu(m){$("main-menu").classList.remove("show");mode=m;if(m==="online"){location.href="online.html";return}resetGame();}
 function resetGame(){diceRollId++;board=emptyBoard();piece=null;player=BLUE;scores={[BLUE]:0,[RED]:0};remaining=MATCH_SECONDS;gameOver=false;paused=true;suddenDeath=false;turnWait=0;lastFrame=0;fallAccumulator=0;aiTarget=null;fastDrop=false;$("overlay").classList.remove("show");$("pause").textContent="PAUSAR";say("Decidiendo quien empieza...");render();startDiceRoll();}
-function tick(now){requestAnimationFrame(tick);if(!lastFrame)lastFrame=now;const dt=Math.min((now-lastFrame)/1000,.1);lastFrame=now;if(gameOver||paused||prepPhase){return}if(!suddenDeath){remaining-=dt;if(remaining<=0){remaining=0;updateClock();if(scores[BLUE]===scores[RED]){suddenDeath=true;say("Empate. Muerte subita!");}else{endGame(scores[BLUE]>scores[RED]?BLUE:RED,"Tiempo agotado.");return;}}}updateClock();if(turnWait>0){turnWait-=dt*1000;if(turnWait<=0&&!gameOver)beginTurn(other(player));return;}if(!piece||gameOver)return;if(currentIsAI()){aiThink+=dt;if(aiTarget!==null&&piece.x!==aiTarget&&aiThink>.11){aiThink=0;const dx=Math.sign(aiTarget-piece.x),nx=piece.x+dx;if(canOccupy(nx,piece.y))piece.x=nx;else aiTarget=piece.x;render();}}fallAccumulator+=dt;const inter=fastDrop?.045:(currentIsAI()?.40:.48);if(fallAccumulator>=inter){fallAccumulator=0;if(canOccupy(piece.x,piece.y+1)){piece.y++}else{lockPiece();return}render();}}
+function tick(now){requestAnimationFrame(tick);if(!lastFrame)lastFrame=now;const dt=Math.min((now-lastFrame)/1000,.1);lastFrame=now;if(gameOver||paused||prepPhase){return}if(!suddenDeath){remaining-=dt;if(remaining<=0){remaining=0;updateClock();if(scores[BLUE]===scores[RED]){suddenDeath=true;say("Empate. Muerte subita!");}else{endGame(scores[BLUE]>scores[RED]?BLUE:RED,"Tiempo agotado.");return;}}}updateClock();if(turnWait>0){turnWait-=dt*1000;if(turnWait<=0&&!gameOver)beginTurn(other(player));return;}if(!piece||gameOver)return;if(currentIsAI()){aiThink+=dt;if(aiTarget!==null&&piece.x!==aiTarget&&aiThink>.11){aiThink=0;const dx=Math.sign(aiTarget-piece.x),nx=piece.x+dx;if(canOccupy(nx,piece.y))piece.x=nx;else aiTarget=piece.x;render();}}fallAccumulator+=dt;const inter=fastDrop?(speedX2?.022:.045):(currentIsAI()?(speedX2?.20:.40):(speedX2?.24:.48));if(fallAccumulator>=inter){fallAccumulator=0;if(canOccupy(piece.x,piece.y+1)){piece.y++}else{lockPiece();return}render();}}
+function toggleSpeed(){speedX2=!speedX2;const btn=$("speedToggle");if(btn){btn.classList.toggle("active",speedX2);btn.textContent=speedX2?"⚡ x2 ACTIVO":"⚡ x2 VELOCIDAD";}say(speedX2?"Velocidad x2 activada.":"Velocidad normal.");try{SFX.clickSoft()}catch{};}
 function togglePause(){if(gameOver||$("dice-overlay").classList.contains("show")||$("controls-overlay").classList.contains("show"))return;paused=!paused;$("pause").textContent=paused?"CONTINUAR":"PAUSAR";$("pause-overlay").classList.toggle("show",paused);fastDrop=false;say(paused?"Pausada.":lastStatus);try{if(paused) SFX.pause(); else SFX.unpause();}catch{};render();}
 function showControls(){ $("controls-overlay").classList.add("show"); }
 function hideControls(){ $("controls-overlay").classList.remove("show"); }
-$("menu-ai").addEventListener("click",()=>launchFromMenu("ai"));$("menu-local").addEventListener("click",()=>launchFromMenu("local"));$("menu-online").addEventListener("click",()=>{location.href="online.html";});$("to-menu").addEventListener("click",showMainMenu);$("pause-continue").addEventListener("click",togglePause);$("pause-controls").addEventListener("click",showControls);$("controls-close").addEventListener("click",hideControls);$("pause-to-menu").addEventListener("click",showMainMenu);$("menu-btn").addEventListener("click",showMainMenu);$("prep-confirm").addEventListener("click",prepConfirm);$("left").addEventListener("click",()=>prepPhase?prepMove(-1):movePiece(-1));$("right").addEventListener("click",()=>prepPhase?prepMove(1):movePiece(1));$("down").addEventListener("pointerdown",()=>{if(!currentIsAI()&&!paused&&!gameOver)fastDrop=true});["pointerup","pointercancel","pointerleave"].forEach(ev=>$("down").addEventListener(ev,()=>fastDrop=false));$("new").addEventListener("click",resetGame);$("again").addEventListener("click",resetGame);$("pause").addEventListener("click",togglePause);
+$("speedToggle")?.addEventListener("click",toggleSpeed);$("menu-ai").addEventListener("click",()=>launchFromMenu("ai"));$("menu-local").addEventListener("click",()=>launchFromMenu("local"));$("menu-online").addEventListener("click",()=>{location.href="online.html";});$("to-menu").addEventListener("click",showMainMenu);$("pause-continue").addEventListener("click",togglePause);$("pause-controls").addEventListener("click",showControls);$("controls-close").addEventListener("click",hideControls);$("pause-to-menu").addEventListener("click",showMainMenu);$("menu-btn").addEventListener("click",showMainMenu);$("prep-confirm").addEventListener("click",prepConfirm);$("left").addEventListener("click",()=>prepPhase?prepMove(-1):movePiece(-1));$("right").addEventListener("click",()=>prepPhase?prepMove(1):movePiece(1));$("down").addEventListener("pointerdown",()=>{if(!currentIsAI()&&!paused&&!gameOver)fastDrop=true});["pointerup","pointercancel","pointerleave"].forEach(ev=>$("down").addEventListener(ev,()=>fastDrop=false));$("new").addEventListener("click",resetGame);$("again").addEventListener("click",resetGame);$("pause").addEventListener("click",togglePause);
 document.addEventListener("keydown",e=>{const k=e.key.toLowerCase();if(["arrowleft","arrowright","arrowdown"," ","a","d","s"].includes(k))e.preventDefault();if(k==="p"&&!e.repeat){togglePause();return}if(e.repeat||!piece||gameOver||paused||currentIsAI())return;if(mode==="local"){if(player===BLUE){if(k==="arrowleft")movePiece(-1);if(k==="arrowright")movePiece(1);if(k==="arrowdown")fastDrop=true;}else{if(k==="a")movePiece(-1);if(k==="d")movePiece(1);if(k==="s")fastDrop=true;}}else{if(k==="arrowleft")movePiece(-1);if(k==="arrowright")movePiece(1);if(k==="arrowdown")fastDrop=true;}if(k===" "){fastDrop=false;lockPiece()}});
 document.addEventListener("keyup",e=>{const k=e.key.toLowerCase();if(k==="arrowdown"||k==="s")fastDrop=false;});
+// FIX SECUENCIA: ya no lanza dados al abrir, muestra menu primero
 board=emptyBoard();scores={[BLUE]:0,[RED]:0};remaining=MATCH_SECONDS;gameOver=false;paused=true;suddenDeath=false;turnWait=0;lastFrame=0;fallAccumulator=0;aiTarget=null;fastDrop=false;showMainMenu();requestAnimationFrame(tick);
 </script>
+
 <script>
+/* Hook clicks sonoros para menus y botones */
 (() => {
   const ids = ["menu-ai","menu-local","menu-online","new","menu-btn","find-rival","pause","left","right","down","again","to-menu","pause-continue","pause-controls","pause-to-menu","controls-close","prep-confirm"];
   ids.forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
-    el.addEventListener('click', ()=>{ try{ if(id==="left"||id==="right") return; SFX.clickSoft(); }catch{} });
+    el.addEventListener('pointerdown', ()=>{ try{ if(id==="left"||id==="right") return; SFX.clickSoft(); }catch{} });
   });
+  document.getElementById('down')?.addEventListener('pointerdown', ()=>{ try{SFX.down()}catch{} });
 })();
-</script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then(r => console.log('SW registrado', r.scope)).catch(e => console.log('SW fallo', e));
-  });
-}
 </script>
 </body>
 </html>
-
-
