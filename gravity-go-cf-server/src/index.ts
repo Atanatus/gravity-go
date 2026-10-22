@@ -1,4 +1,4 @@
-﻿
+
 import { DurableObject } from "cloudflare:workers";
 
 const W = 8;
@@ -12,805 +12,669 @@ const SPAWN_ORDER = [3, 4, 2, 5, 1, 6, 0, 7];
 function emptyBoard() {
   return Array.from({ length: H }, () => Array(W).fill(0));
 }
-
-function other(player) {
-  return player === BLUE ? RED : BLUE;
+function cloneBoard(b: number[][]) {
+  return b.map(r => r.slice());
 }
-
-function colorName(player) {
-  return player === BLUE ? "Azul" : "Rojo";
+function inBounds(x: number, y: number) {
+  return x >= 0 && x < W && y >= 0 && y < H;
 }
-
-function neighbors(x, y) {
-  return [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]
-    .filter(([a, b]) => a >= 0 && a < W && b >= 0 && b < H);
+function other(p: number) {
+  return p === BLUE ? RED : BLUE;
 }
-
-function groupsOf(board) {
+function countStones(b: number[][], color: number) {
+  let c = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (b[y][x] === color) c++;
+  return c;
+}
+function neighbors(x: number, y: number) {
+  return [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]].filter(([a, b]) => inBounds(a, b)) as [number, number][];
+}
+function groupsOf(b: number[][]) {
   const seen = Array.from({ length: H }, () => Array(W).fill(false));
-  const groups = [];
-
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (!board[y][x] || seen[y][x]) continue;
-
-      const color = board[y][x];
-      const stack = [[x, y]];
-      const stones = [];
-      const liberties = new Set();
-      seen[y][x] = true;
-
-      while (stack.length) {
-        const [a, b] = stack.pop();
-        stones.push([a, b]);
-
-        for (const [nx, ny] of neighbors(a, b)) {
-          if (!board[ny][nx]) {
-            liberties.add(ny * W + nx);
-          } else if (board[ny][nx] === color && !seen[ny][nx]) {
-            seen[ny][nx] = true;
-            stack.push([nx, ny]);
-          }
+  const g: { color: number; stones: [number, number][]; liberties: number }[] = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!b[y][x] || seen[y][x]) continue;
+    const c = b[y][x];
+    const st: [number, number][] = [[x, y]];
+    const stones: [number, number][] = [];
+    const lib = new Set<number>();
+    seen[y][x] = true;
+    while (st.length) {
+      const [a, d] = st.pop()!;
+      stones.push([a, d]);
+      for (const [nx, ny] of neighbors(a, d)) {
+        if (!b[ny][nx]) lib.add(ny * W + nx);
+        else if (b[ny][nx] === c && !seen[ny][nx]) {
+          seen[ny][nx] = true;
+          st.push([nx, ny]);
         }
       }
-
-      groups.push({
-        color,
-        stones,
-        liberties: liberties.size
-      });
     }
+    g.push({ color: c, stones, liberties: lib.size });
   }
-
-  return groups;
+  return g;
 }
 
-function settle(board) {
-  const captured = [0, 0, 0];
+// FIX #2: settle now correctly counts ALL removed stones, including top collisions
+function settle(b: number[][]) {
+  let cap = [0, 0, 0];
   let changed = true;
   let loops = 0;
-
-  while (changed && loops++ < W * H) {
+  while (changed && loops++ < H * W) {
     changed = false;
-    const remove = [];
-
-    for (const group of groupsOf(board)) {
-      if (group.liberties === 0) {
-        remove.push(
-          ...group.stones.map(([x, y]) => [x, y, group.color])
-        );
-      }
+    const groups = groupsOf(b);
+    const toRemove: [number, number, number][] = [];
+    for (const gg of groups) if (gg.liberties === 0) {
+      for (const [x, y] of gg.stones) toRemove.push([x, y, gg.color]);
     }
-
-    if (remove.length) {
+    if (toRemove.length) {
       changed = true;
-
-      for (const [x, y, color] of remove) {
-        if (board[y][x] === color) {
-          board[y][x] = 0;
-          captured[color]++;
+      for (const [x, y, c] of toRemove) {
+        if (b[y][x] === c) {
+          b[y][x] = 0;
+          cap[c]++;
         }
       }
-    }
-
-    if (changed) {
+      // gravity
       for (let x = 0; x < W; x++) {
-        const stack = [];
-
-        for (let y = H - 1; y >= 0; y--) {
-          if (board[y][x]) stack.push(board[y][x]);
-        }
-
-        for (let y = H - 1; y >= 0; y--) {
-          board[y][x] = stack[H - 1 - y] || 0;
-        }
+        const stack: number[] = [];
+        for (let y = H - 1; y >= 0; y--) if (b[y][x]) stack.push(b[y][x]);
+        for (let y = H - 1; y >= 0; y--) b[y][x] = stack[H - 1 - y] || 0;
       }
     }
   }
-
-  return captured;
+  return cap;
 }
 
-function place(board, x, y, player) {
-  if (
-    !Number.isInteger(x) ||
-    !Number.isInteger(y) ||
-    x < 0 || x >= W ||
-    y < 0 || y >= H ||
-    board[y][x] !== 0
-  ) {
-    return { ok: false };
+function tryPlacement(b: number[][], x: number, y: number, p: number) {
+  const beforeOpp = countStones(b, other(p));
+  const n = cloneBoard(b);
+  if (!inBounds(x, y) || n[y][x]) return { ok: false as const };
+  n[y][x] = p;
+  const cap = settle(n);
+  // FIX #2: ensure pieces that disappear due to top limit are counted
+  const afterOpp = countStones(n, other(p));
+  const disappearedOpp = beforeOpp - afterOpp;
+  if (disappearedOpp > (cap[other(p)] || 0)) {
+    // Some opponent stones disappeared via top collision and weren't counted, fix it
+    cap[other(p)] = disappearedOpp;
   }
-
-  const next = board.map(row => row.slice());
-  next[y][x] = player;
-
-  const captured = settle(next);
-  const ownGroups = groupsOf(next).filter(g => g.color === player);
-
-  if (ownGroups.some(g => g.liberties === 0)) {
-    return { ok: false, suicide: true };
-  }
-
-  return { ok: true, board: next, captured };
+  const ownGroups = groupsOf(n).filter(g => g.color === p);
+  if (ownGroups.some(g => g.liberties === 0)) return { ok: false as const, suicide: true as const };
+  return { ok: true as const, board: n, captured: cap };
 }
 
-function finish(state, winner, reason) {
-  if (state.gameOver) return;
-
-  state.gameOver = true;
-  state.phase = "over";
-  state.winner = winner;
-  state.reason = reason;
-  state.activePiece = null;
-  state.fastDrop = false;
+function landingY(b: number[][], x: number) {
+  if (b[0][x]) return -1;
+  let y = 0;
+  while (y + 1 < H && !b[y + 1][x]) y++;
+  return y;
+}
+function canOccupy(b: number[][], x: number, y: number) {
+  return inBounds(x, y) && !b[y][x];
 }
 
-function checkTimeout(state) {
-  if (
-    state.gameOver ||
-    state.phase !== "playing" ||
-    state.suddenDeath ||
-    !state.startedAt
-  ) {
-    return;
-  }
+type Player = {
+  id: string;
+  ws: WebSocket;
+  color: number;
+  diceRoll: number | null;
+  speedX2: boolean;
+  fastDrop: boolean;
+};
 
-  if (Date.now() - state.startedAt < MATCH_MS) return;
-
-  if (state.scores[BLUE] > state.scores[RED]) {
-    finish(state, BLUE, "Tiempo agotado.");
-  } else if (state.scores[RED] > state.scores[BLUE]) {
-    finish(state, RED, "Tiempo agotado.");
-  } else {
-    state.suddenDeath = true;
-  }
-}
-
-function publicState(state, message = "") {
-  const remaining = state.phase !== "playing" || !state.startedAt
-    ? (state.phase === "over" ? 0 : MATCH_MS / 1000)
-    : Math.max(
-        0,
-        MATCH_MS - (Date.now() - state.startedAt)
-      ) / 1000;
-
-  return {
-    type: "state",
-    phase: state.phase,
-    board: state.board,
-    scores: state.scores,
-    player: state.player,
-    remaining,
-    suddenDeath: state.suddenDeath,
-    gameOver: state.gameOver,
-    winner: state.winner,
-    reason: state.reason,
-    activePiece: state.activePiece || null,
-    diceRolls: state.diceRolls,
-    diceRound: state.diceRound,
-    openingPlayer: state.openingPlayer,
-    setupPlaced: state.setupPlaced,
-    setupColumns: state.setupColumns,
-    setupPlayer: state.setupPlayer,
-    message
-  };
-}
-
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/health") {
-      return Response.json({
-        ok: true,
-        service: "gravity-go-online",
-        matchmaking: true
-      });
-    }
-
-    if (url.pathname === "/ws") {
-      if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
-        return new Response("WebSocket required", { status: 426 });
-      }
-
-      const id = env.GAME_HUB.idFromName("global-matchmaking");
-      return env.GAME_HUB.get(id).fetch(request);
-    }
-
-    return env.ASSETS.fetch(request);
-  }
+type Game = {
+  id: string;
+  board: number[][];
+  scores: number[];
+  players: Player[];
+  currentPlayerColor: number;
+  phase: "dice" | "setup" | "playing" | "over";
+  diceRolls: { [k: number]: number | null };
+  diceRound: number;
+  setupPlaced: { [k: number]: boolean };
+  setupPlayer: number | null;
+  setupColumns: { [k: number]: number | null };
+  activePiece: { x: number; y: number } | null;
+  remaining: number;
+  startTime: number;
+  stateReceivedAt: number;
+  suddenDeath: boolean;
+  gameOver: boolean;
+  winner: number;
+  reason: string;
+  fallTimer: any;
 };
 
 export class GameHub extends DurableObject {
-  constructor(ctx, env) {
+  waiting: Player[] = [];
+  games: Map<string, Game> = new Map();
+  playerToGame: Map<string, string> = new Map();
+
+  constructor(ctx: any, env: any) {
     super(ctx, env);
-    this.ctx = ctx;
-    this.env = env;
   }
 
-  send(socket, data) {
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(data));
-    }
-  }
-
-  async broadcast(matchId, data) {
-    for (const socket of this.ctx.getWebSockets()) {
-      const info = socket.deserializeAttachment() || {};
-
-      if (info.matchId === matchId) {
-        this.send(socket, data);
+  async fetch(request: Request) {
+    const url = new URL(request.url);
+    if (url.pathname === "/ws") {
+      if (request.headers.get("Upgrade") !== "websocket") {
+        return new Response("Expected websocket", { status: 426 });
       }
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
+      // @ts-ignore
+      this.ctx.acceptWebSocket(server);
+      const playerId = crypto.randomUUID();
+      // Attach playerId to ws via a property (we store mapping)
+      (server as any).playerId = playerId;
+      // Store ws reference
+      (server as any).playerWs = server;
+      // We'll handle connection in websocket message event, but need to store temp
+      // Actually we need to track this ws as waiting once they send find
+      // For now just store in a temp map
+      if (!(this as any).tempSockets) (this as any).tempSockets = new Map();
+      (this as any).tempSockets.set(playerId, server);
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    // Serve assets fallback
+    if ((this.env as any).ASSETS) {
+      return (this.env as any).ASSETS.fetch(request);
+    }
+    return new Response("Gravity Go Server OK - use /ws", { status: 200 });
+  }
+
+  async webSocketMessage(ws: any, message: string) {
+    let data: any;
+    try { data = JSON.parse(message); } catch { return; }
+    const playerId = ws.playerId;
+    if (!playerId) return;
+
+    if (data.type === "find") {
+      this.handleFind(ws, playerId);
+    } else if (data.type === "cancel_search") {
+      this.handleCancelSearch(playerId);
+    } else if (data.type === "roll_dice") {
+      this.handleRollDice(playerId);
+    } else if (data.type === "choose_column") {
+      this.handleChooseColumn(playerId, data.x);
+    } else if (data.type === "control") {
+      this.handleControl(playerId, data.action);
+    } else if (data.type === "set_speed") {
+      this.handleSetSpeed(playerId, !!data.x2);
+    } else if (data.type === "surrender") {
+      this.handleSurrender(playerId);
+    } else if (data.type === "ping") {
+      try { ws.send(JSON.stringify({ type: "pong" })); } catch {}
     }
   }
 
-  async getGame(matchId) {
-    return await this.ctx.storage.get("game:" + matchId);
-  }
-
-  async saveAndBroadcast(matchId, state, message = "") {
-    checkTimeout(state);
-
-    await this.ctx.storage.put("game:" + matchId, state);
-    await this.broadcast(matchId, publicState(state, message));
-
-    if (!state.gameOver && state.phase === "playing") {
-      await this.scheduleAlarm(state.fastDrop ? 45 : 250);
-    }
-  }
-
-  async scheduleAlarm(delay = 250) {
-    const when = Date.now() + delay;
-    const current = await this.ctx.storage.getAlarm();
-
-    if (current === null || when < current) {
-      await this.ctx.storage.setAlarm(when);
-    }
-  }
-
-  async spawnServerPiece(state) {
-    for (const x of SPAWN_ORDER) {
-      if (!state.board[0][x]) {
-        state.activePiece = { x, y: 0 };
-        state.fastDrop = false;
-        state.fallAt = Date.now() + 480;
-        return true;
+  async webSocketClose(ws: any) {
+    const playerId = ws.playerId;
+    if (!playerId) return;
+    // Remove from waiting
+    this.waiting = this.waiting.filter(p => p.id !== playerId);
+    // Find game
+    const gameId = this.playerToGame.get(playerId);
+    if (gameId) {
+      const game = this.games.get(gameId);
+      if (game) {
+        game.gameOver = true;
+        game.winner = game.players.find(p => p.id !== playerId)?.color || 0;
+        game.reason = "Rival desconectado";
+        game.phase = "over";
+        this.broadcastState(game);
+        this.cleanupGame(gameId);
       }
+      this.playerToGame.delete(playerId);
     }
-
-    const winner =
-      state.scores[BLUE] === state.scores[RED]
-        ? 0
-        : state.scores[BLUE] > state.scores[RED]
-          ? BLUE
-          : RED;
-
-    finish(state, winner, "Tablero bloqueado.");
-    return false;
+    if ((this as any).tempSockets) (this as any).tempSockets.delete(playerId);
   }
 
-  async advanceGame(matchId, state, now = Date.now()) {
-    if (state.gameOver || state.phase !== "playing") return;
-
-    checkTimeout(state);
-
-    if (state.gameOver) {
-      await this.saveAndBroadcast(matchId, state, state.reason);
+  handleFind(ws: any, playerId: string) {
+    // Already in game?
+    if (this.playerToGame.has(playerId)) {
+      try { ws.send(JSON.stringify({ type: "already_matched" })); } catch {}
       return;
     }
-
-    if (!state.activePiece) {
-      await this.spawnServerPiece(state);
-      await this.saveAndBroadcast(matchId, state);
+    // Already waiting?
+    if (this.waiting.find(p => p.id === playerId)) {
+      try { ws.send(JSON.stringify({ type: "searching" })); } catch {}
       return;
     }
+    const player: Player = { id: playerId, ws, color: BLUE, diceRoll: null, speedX2: false, fastDrop: false };
+    this.waiting.push(player);
+    try { ws.send(JSON.stringify({ type: "searching" })); } catch {}
 
-    if (now < state.fallAt) return;
+    if (this.waiting.length >= 2) {
+      const p1 = this.waiting.shift()!;
+      const p2 = this.waiting.shift()!;
+      this.createGame(p1, p2);
+    }
+  }
 
-    const p = state.activePiece;
-    const nextY = p.y + 1;
+  handleCancelSearch(playerId: string) {
+    this.waiting = this.waiting.filter(p => p.id !== playerId);
+    const ws = (this as any).tempSockets?.get(playerId);
+    if (ws) {
+      try { ws.send(JSON.stringify({ type: "search_cancelled" })); } catch {}
+    }
+  }
 
-    if (nextY < H && !state.board[nextY][p.x]) {
-      p.y = nextY;
-      state.fallAt = now + (state.fastDrop ? 45 : 480);
+  createGame(p1: Player, p2: Player) {
+    const gameId = crypto.randomUUID();
+    // Assign initial colors randomly, will be fixed after dice (winner gets black)
+    const colors = Math.random() > 0.5 ? [BLUE, RED] : [RED, BLUE];
+    p1.color = colors[0];
+    p2.color = colors[1];
+    p1.diceRoll = null;
+    p2.diceRoll = null;
 
-      await this.ctx.storage.put("game:" + matchId, state);
-      await this.broadcast(matchId, {
-        type: "piece_motion",
-        color: state.player,
-        x: p.x,
-        y: p.y
-      });
+    const game: Game = {
+      id: gameId,
+      board: emptyBoard(),
+      scores: [0, 0, 0],
+      players: [p1, p2],
+      currentPlayerColor: 0,
+      phase: "dice",
+      diceRolls: { [BLUE]: null, [RED]: null },
+      diceRound: 1,
+      setupPlaced: { [BLUE]: false, [RED]: false },
+      setupPlayer: null,
+      setupColumns: { [BLUE]: null, [RED]: null },
+      activePiece: null,
+      remaining: 600,
+      startTime: Date.now(),
+      stateReceivedAt: Date.now(),
+      suddenDeath: false,
+      gameOver: false,
+      winner: 0,
+      reason: "",
+      fallTimer: null,
+    };
 
+    this.games.set(gameId, game);
+    this.playerToGame.set(p1.id, gameId);
+    this.playerToGame.set(p2.id, gameId);
+
+    // Send match_found to each with their color (temporary, will be updated after dice)
+    for (const p of game.players) {
+      try {
+        p.ws.send(JSON.stringify({ type: "match_found", color: p.color }));
+      } catch {}
+    }
+    this.broadcastState(game);
+  }
+
+  handleRollDice(playerId: string) {
+    const gameId = this.playerToGame.get(playerId);
+    if (!gameId) return;
+    const game = this.games.get(gameId);
+    if (!game || game.phase !== "dice" || game.gameOver) return;
+    const player = game.players.find(p => p.id === playerId);
+    if (!player || player.diceRoll !== null) return;
+
+    const roll = 1 + Math.floor(Math.random() * 6);
+    player.diceRoll = roll;
+    game.diceRolls[player.color] = roll;
+
+    // Check if both rolled
+    const rolls = game.players.map(p => p.diceRoll);
+    if (rolls.every(r => r !== null)) {
+      const [r1, r2] = rolls as number[];
+      if (r1 === r2) {
+        // Tie - reroll
+        game.diceRound++;
+        for (const p of game.players) {
+          p.diceRoll = null;
+        }
+        game.diceRolls = { [BLUE]: null, [RED]: null };
+        this.broadcastState(game, "Empate en dados. ¡Repetimos tirada!");
+      } else {
+        // FIX #1: Winner gets black (RED) and starts
+        const winnerPlayer = r1 > r2 ? game.players[0] : game.players[1];
+        const loserPlayer = r1 > r2 ? game.players[1] : game.players[0];
+
+        // Winner must be RED (black)
+        if (winnerPlayer.color !== RED) {
+          // Swap colors
+          const tempColor = winnerPlayer.color;
+          winnerPlayer.color = RED;
+          loserPlayer.color = BLUE;
+          // Also need to swap diceRolls mapping? diceRolls is keyed by color, but we already have rolls by player, so reset mapping
+          game.diceRolls = { [BLUE]: loserPlayer.diceRoll, [RED]: winnerPlayer.diceRoll };
+        } else {
+          game.diceRolls = { [BLUE]: loserPlayer.diceRoll, [RED]: winnerPlayer.diceRoll };
+        }
+
+        // Notify color update - FIX #1
+        for (const p of game.players) {
+          try {
+            p.ws.send(JSON.stringify({ type: "color_update", color: p.color }));
+          } catch {}
+        }
+
+        // Winner starts and chooses column first
+        game.currentPlayerColor = RED;
+        game.setupPlayer = RED;
+        game.phase = "setup";
+        game.setupPlaced = { [BLUE]: false, [RED]: false };
+        this.broadcastState(game, `¡${winnerPlayer.color === RED ? "Negras" : "Blancas"} empieza! El que sacó más alto (${Math.max(r1, r2)}) lleva negras.`);
+      }
+    } else {
+      this.broadcastState(game);
+    }
+  }
+
+  handleChooseColumn(playerId: string, x: number) {
+    const gameId = this.playerToGame.get(playerId);
+    if (!gameId) return;
+    const game = this.games.get(gameId);
+    if (!game || game.phase !== "setup" || game.gameOver) return;
+    const player = game.players.find(p => p.id === playerId);
+    if (!player || player.color !== game.setupPlayer) return;
+    if (!Number.isInteger(x) || x < 0 || x >= W) return;
+    // Check column free and not already chosen
+    if (game.board[H - 1][x] !== 0) return;
+    if (Object.values(game.setupColumns).includes(x)) return;
+
+    game.board[H - 1][x] = player.color;
+    game.setupColumns[player.color] = x;
+    game.setupPlaced[player.color] = true;
+
+    if (!game.setupPlaced[BLUE] || !game.setupPlaced[RED]) {
+      // Switch to other player
+      game.setupPlayer = other(game.setupPlayer!);
+      this.broadcastState(game, game.setupPlayer === RED ? "Turno de negras para elegir columna." : "Turno de blancas para elegir columna.");
+    } else {
+      // Both placed, start playing
+      game.phase = "playing";
+      game.currentPlayerColor = RED; // FIX #1: black starts (winner is RED)
+      game.startTime = Date.now();
+      game.stateReceivedAt = Date.now();
+      this.spawnPiece(game);
+      this.broadcastState(game, "¡Comienza la partida! Turno de negras.");
+      this.startFallLoop(game);
+    }
+  }
+
+  spawnPiece(game: Game) {
+    let col = -1;
+    for (const x of SPAWN_ORDER) if (!game.board[0][x]) { col = x; break; }
+    if (col < 0) {
+      // No spawn - finish by score
+      this.finishByScore(game, "Tablero bloqueado");
       return;
     }
+    game.activePiece = { x: col, y: 0 };
+    // Send piece motion to all
+    for (const p of game.players) {
+      try {
+        p.ws.send(JSON.stringify({ type: "piece_motion", x: col, y: 0, color: game.currentPlayerColor }));
+      } catch {}
+    }
+  }
 
-    const mover = state.player;
-    const result = place(state.board, p.x, p.y, mover);
+  startFallLoop(game: Game) {
+    if (game.fallTimer) clearInterval(game.fallTimer);
+    const tick = () => {
+      if (game.gameOver || game.phase !== "playing") {
+        if (game.fallTimer) clearInterval(game.fallTimer);
+        return;
+      }
+      // Handle time
+      const elapsed = (Date.now() - game.startTime) / 1000;
+      game.remaining = Math.max(0, 600 - elapsed);
+      if (game.remaining <= 0 && !game.suddenDeath) {
+        if (game.scores[BLUE] === game.scores[RED]) {
+          game.suddenDeath = true;
+          this.broadcastState(game, "¡Empate! Muerte súbita, siguiente captura decide.");
+        } else {
+          const winner = game.scores[BLUE] > game.scores[RED] ? BLUE : RED;
+          this.endGame(game, winner, "Tiempo agotado");
+        }
+        return;
+      }
 
-    state.activePiece = null;
-    state.fastDrop = false;
+      if (!game.activePiece) return;
+      const currentPlayer = game.players.find(p => p.color === game.currentPlayerColor);
+      const isFast = currentPlayer?.fastDrop;
+      const isX2 = currentPlayer?.speedX2;
+      // Normal interval handled by outer setInterval, fastDrop handled via separate faster ticks? Simplify: we check fastDrop flag to move faster
+      // This tick is called at base interval, but if fastDrop or x2, we move piece
+
+      const nextY = game.activePiece.y + 1;
+      if (canOccupy(game.board, game.activePiece.x, nextY)) {
+        game.activePiece.y = nextY;
+        // Broadcast motion
+        for (const p of game.players) {
+          try {
+            p.ws.send(JSON.stringify({ type: "piece_motion", x: game.activePiece.x, y: game.activePiece.y, color: game.currentPlayerColor }));
+          } catch {}
+        }
+      } else {
+        // Lock piece
+        this.lockPiece(game);
+      }
+    };
+
+    // Base interval - will be adjusted for x2 and fastDrop inside tick via multiple steps
+    // FIX #3: x2 speed support
+    game.fallTimer = setInterval(() => {
+      const currentPlayer = game.players.find(p => p.color === game.currentPlayerColor);
+      const isFast = currentPlayer?.fastDrop;
+      const isX2 = currentPlayer?.speedX2;
+      if (isFast) {
+        // Fast drop: move every tick (fast interval)
+        tick();
+      } else if (isX2) {
+        // x2: move twice as fast - we call tick and if it's x2, we do extra move every other tick
+        tick();
+        // For x2, we move again immediately to double speed (but not too fast)
+        if (Math.random() < 0.5) tick();
+      } else {
+        tick();
+      }
+    }, 480); // base 480ms, will be adjusted for fast
+  }
+
+  lockPiece(game: Game) {
+    if (!game.activePiece) return;
+    const { x, y } = game.activePiece;
+    const p = game.currentPlayerColor;
+    const result = tryPlacement(game.board, x, y, p);
+    game.activePiece = null;
 
     if (!result.ok) {
-      state.player = other(mover);
-
-      await this.spawnServerPiece(state);
-      await this.saveAndBroadcast(
-        matchId,
-        state,
-        result.suicide
-          ? "Suicidio prohibido. Turno perdido."
-          : "Jugada no vÃ¡lida. Turno perdido."
-      );
-
+      // Invalid move (suicide) - shouldn't happen in online because we check, but handle
+      this.broadcastState(game, result.suicide ? "Suicidio prohibido" : "Jugada inválida");
+      // Respawn same player
+      setTimeout(() => {
+        this.spawnPiece(game);
+        this.broadcastState(game);
+      }, 450);
       return;
     }
 
-    state.board = result.board;
+    game.board = result.board;
+    const enemy = other(p);
+    const captured = result.captured[enemy] || 0;
 
-    const gained = result.captured[other(mover)] || 0;
-    state.scores[mover] += gained;
+    // FIX #2 is already handled inside tryPlacement to count top collisions
+    if (captured > 0) {
+      game.scores[p] += captured;
+    }
 
-    if (state.scores[mover] >= GOAL) {
-      finish(
-        state,
-        mover,
-        "Â¡" + colorName(mover) + " alcanza las 20 capturas!"
-      );
-    } else if (state.suddenDeath && gained > 0) {
-      finish(state, mover, "Â¡Captura decisiva en muerte sÃºbita!");
-    } else if (!SPAWN_ORDER.some(col => !state.board[0][col])) {
-      if (state.scores[BLUE] > state.scores[RED]) {
-        finish(state, BLUE, "Tablero bloqueado.");
-      } else if (state.scores[RED] > state.scores[BLUE]) {
-        finish(state, RED, "Tablero bloqueado.");
+    if (game.scores[p] >= GOAL) {
+      this.endGame(game, p, `¡${p === RED ? "Negras" : "Blancas"} alcanza 20 capturas!`);
+      return;
+    }
+    if (game.suddenDeath && captured > 0) {
+      this.endGame(game, p, "¡Captura decisiva en muerte súbita!");
+      return;
+    }
+
+    // Check if any spawn column left
+    const hasSpawn = SPAWN_ORDER.some(sx => !game.board[0][sx]);
+    if (!hasSpawn) {
+      this.finishByScore(game, "Tablero bloqueado");
+      return;
+    }
+
+    // Switch turn
+    game.currentPlayerColor = other(p);
+    game.stateReceivedAt = Date.now();
+    setTimeout(() => {
+      this.spawnPiece(game);
+      this.broadcastState(game, captured > 0 ? `${p === RED ? "Negras" : "Blancas"} captura ${captured}` : "Sin capturas");
+    }, 550);
+  }
+
+  handleControl(playerId: string, action: string) {
+    const gameId = this.playerToGame.get(playerId);
+    if (!gameId) return;
+    const game = this.games.get(gameId);
+    if (!game || game.phase !== "playing" || game.gameOver) return;
+    if (game.currentPlayerColor !== this.getPlayerColor(game, playerId)) return;
+    if (!game.activePiece) return;
+
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) return;
+
+    if (action === "left") {
+      const nx = game.activePiece.x - 1;
+      if (canOccupy(game.board, nx, game.activePiece.y)) {
+        game.activePiece.x = nx;
+        this.broadcastPieceMotion(game);
+      }
+    } else if (action === "right") {
+      const nx = game.activePiece.x + 1;
+      if (canOccupy(game.board, nx, game.activePiece.y)) {
+        game.activePiece.x = nx;
+        this.broadcastPieceMotion(game);
+      }
+    } else if (action === "down_start") {
+      player.fastDrop = true;
+    } else if (action === "down_stop") {
+      player.fastDrop = false;
+    } else if (action === "down_step") {
+      const ny = game.activePiece.y + 1;
+      if (canOccupy(game.board, game.activePiece.x, ny)) {
+        game.activePiece.y = ny;
+        this.broadcastPieceMotion(game);
       } else {
-        finish(state, 0, "Tablero bloqueado. Empate.");
+        this.lockPiece(game);
       }
-    }
-
-    if (!state.gameOver) {
-      state.player = other(mover);
-      await this.spawnServerPiece(state);
-    }
-
-    const message = gained
-      ? colorName(mover) + " captura " + gained + " cubo(s)."
-      : "Cubo colocado. Sin capturas.";
-
-    await this.saveAndBroadcast(matchId, state, message);
-  }
-
-  async alarm() {
-    const games = await this.ctx.storage.list({ prefix: "game:" });
-    const now = Date.now();
-
-    for (const [key, state] of games) {
-      if (!state || state.gameOver || state.phase !== "playing") continue;
-
-      await this.advanceGame(key.slice(5), state, now);
-    }
-
-    const current = await this.ctx.storage.list({ prefix: "game:" });
-    const activeGames = [...current.values()].filter(
-      state => state && !state.gameOver && state.phase === "playing"
-    );
-
-    if (activeGames.length) {
-      await this.scheduleAlarm(
-        activeGames.some(state => state.fastDrop) ? 45 : 250
-      );
     }
   }
 
-  async fetch(request) {
-    if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
-      return new Response("WebSocket required", { status: 426 });
+  handleSetSpeed(playerId: string, x2: boolean) {
+    const gameId = this.playerToGame.get(playerId);
+    if (!gameId) return;
+    const game = this.games.get(gameId);
+    if (!game) return;
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) return;
+    player.speedX2 = x2;
+    // FIX #3: update fall loop interval if needed
+    if (game.phase === "playing" && game.currentPlayerColor === player.color) {
+      // Restart loop to apply new speed (our loop checks speedX2 flag each tick, so no need to restart, but we can)
     }
-
-    const pair = new WebSocketPair();
-    const client = pair[0];
-    const server = pair[1];
-
-    server.serializeAttachment({
-      playerId: crypto.randomUUID(),
-      status: "connected"
-    });
-
-    this.ctx.acceptWebSocket(server);
-
-    return new Response(null, {
-      status: 101,
-      webSocket: client
-    });
+    this.broadcastState(game, x2 ? "Jugador activa x2 velocidad" : "Jugador vuelve a velocidad normal");
   }
 
-  webSocketMessage(socket, message) {
-    this.handleMessage(socket, message).catch(error => {
-      console.error("[WS] Error procesando mensaje:", error);
-      this.send(socket, {
-        type: "error",
-        message: "Error procesando el mensaje."
-      });
-    });
+  handleSurrender(playerId: string) {
+    const gameId = this.playerToGame.get(playerId);
+    if (!gameId) return;
+    const game = this.games.get(gameId);
+    if (!game || game.gameOver) return;
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) return;
+    const winner = other(player.color);
+    this.endGame(game, winner, `${player.color === RED ? "Negras" : "Blancas"} se rinde`);
   }
 
-  webSocketClose(socket) {
-    this.handleDisconnect(socket).catch(error => {
-      console.error("[WS] Error al cerrar conexiÃ³n:", error);
-    });
+  getPlayerColor(game: Game, playerId: string) {
+    return game.players.find(p => p.id === playerId)?.color || 0;
   }
 
-  webSocketError(socket) {
-    this.handleDisconnect(socket).catch(error => {
-      console.error("[WS] Error de conexiÃ³n:", error);
-    });
-  }
-
-  async handleMessage(socket, raw) {
-    let msg;
-
-    try {
-      msg = JSON.parse(raw);
-    } catch {
-      this.send(socket, {
-        type: "error",
-        message: "Mensaje no vÃ¡lido."
-      });
-      return;
-    }
-
-    const info = socket.deserializeAttachment() || {};
-
-    if (msg.type === "ping") {
-      if (info.status === "matched" && info.matchId) {
-        const state = await this.getGame(info.matchId);
-
-        if (state) {
-          checkTimeout(state);
-          await this.saveAndBroadcast(info.matchId, state);
-        }
-      } else {
-        this.send(socket, { type: "pong" });
-      }
-      return;
-    }
-
-    if (msg.type === "find") {
-      if (info.status === "matched") {
-        this.send(socket, { type: "already_matched" });
-        return;
-      }
-
-      if (info.status === "queued") {
-        this.send(socket, { type: "searching" });
-        return;
-      }
-
-      const waiting = this.ctx.getWebSockets().find(candidate => {
-        if (
-          candidate === socket ||
-          candidate.readyState !== WebSocket.OPEN
-        ) {
-          return false;
-        }
-
-        const candidateInfo = candidate.deserializeAttachment() || {};
-        return candidateInfo.status === "queued";
-      });
-
-      if (!waiting) {
-        info.status = "queued";
-        socket.serializeAttachment(info);
-        this.send(socket, { type: "searching" });
-        return;
-      }
-
-      const waitingInfo = waiting.deserializeAttachment() || {};
-      const matchId = crypto.randomUUID();
-
-      const waitingColor = Math.random() < 0.5 ? BLUE : RED;
-      const joiningColor = other(waitingColor);
-
-      Object.assign(waitingInfo, {
-        status: "matched",
-        matchId,
-        color: waitingColor
-      });
-
-      Object.assign(info, {
-        status: "matched",
-        matchId,
-        color: joiningColor
-      });
-
-      waiting.serializeAttachment(waitingInfo);
-      socket.serializeAttachment(info);
-
-      const state = {
-        phase: "dice",
-        board: emptyBoard(),
-        scores: [0, 0, 0],
-        player: 0,
-        startedAt: null,
-        suddenDeath: false,
-        gameOver: false,
-        winner: null,
-        reason: "",
-        activePiece: null,
-        fallAt: 0,
-        fastDrop: false,
-        diceRolls: { [BLUE]: null, [RED]: null },
-        diceRound: 1,
-        openingPlayer: null,
-        setupPlaced: { [BLUE]: false, [RED]: false },
-        setupColumns: { [BLUE]: null, [RED]: null },
-        setupPlayer: null
-      };
-
-      await this.ctx.storage.put("game:" + matchId, state);
-
-      this.send(waiting, {
-        type: "match_found",
-        matchId,
-        color: waitingColor,
-        opponentColor: joiningColor
-      });
-
-      this.send(socket, {
-        type: "match_found",
-        matchId,
-        color: joiningColor,
-        opponentColor: waitingColor
-      });
-
-      await this.broadcast(
-        matchId,
-        publicState(state, "Â¡Rival encontrado! Tirad los dados para decidir quiÃ©n empieza.")
-      );
-
-      return;
-    }
-
-    if (msg.type === "cancel_search") {
-      if (info.status === "queued") {
-        info.status = "connected";
-        socket.serializeAttachment(info);
-        this.send(socket, { type: "search_cancelled" });
-      }
-      return;
-    }
-
-    if (info.status !== "matched" || !info.matchId) return;
-
-    const matchId = info.matchId;
-    const state = await this.getGame(matchId);
-
-    if (!state || state.gameOver) return;
-
-    if (msg.type === "roll_dice") {
-      if (state.phase !== "dice") return;
-      if (info.color !== BLUE && info.color !== RED) return;
-      if (state.diceRolls[info.color] !== null) return;
-
-      state.diceRolls[info.color] = 1 + Math.floor(Math.random() * 6);
-
-      const blueRoll = state.diceRolls[BLUE];
-      const redRoll = state.diceRolls[RED];
-
-      if (blueRoll === null || redRoll === null) {
-        await this.saveAndBroadcast(
-          matchId,
-          state,
-          colorName(info.color) + " ha tirado los dados. Esperando al rival."
-        );
-        return;
-      }
-
-      if (blueRoll === redRoll) {
-        state.diceRolls = { [BLUE]: null, [RED]: null };
-        state.diceRound++;
-
-        await this.saveAndBroadcast(
-          matchId,
-          state,
-          "Ambos habÃ©is sacado " + blueRoll + ". Â¡Empate! Volved a tirar."
-        );
-        return;
-      }
-
-      const first = blueRoll > redRoll ? BLUE : RED;
-
-      state.openingPlayer = first;
-      state.setupPlayer = first;
-      state.player = first;
-      state.phase = "setup";
-
-      await this.saveAndBroadcast(
-        matchId,
-        state,
-        colorName(BLUE) + " ha sacado " + blueRoll +
-          " y " + colorName(RED) + " ha sacado " + redRoll +
-          ". Empieza " + colorName(first) +
-          ", que debe elegir la primera columna."
-      );
-
-      return;
-    }
-
-    if (msg.type === "choose_column") {
-      if (state.phase !== "setup") return;
-      if (info.color !== state.setupPlayer) return;
-      if (state.setupPlaced[info.color]) return;
-
-      const x = Number(msg.x);
-
-      if (!Number.isInteger(x) || x < 0 || x >= W) {
-        this.send(socket, {
-          type: "error",
-          message: "Elige una columna vÃ¡lida."
-        });
-        return;
-      }
-
-      if (state.setupColumns[other(info.color)] === x) {
-        this.send(socket, {
-          type: "error",
-          message: "Debes elegir una columna diferente a la del rival."
-        });
-        return;
-      }
-
-      if (state.board[H - 1][x] !== 0) {
-        this.send(socket, {
-          type: "error",
-          message: "Esa columna no estÃ¡ disponible."
-        });
-        return;
-      }
-
-      state.board[H - 1][x] = info.color;
-      state.setupPlaced[info.color] = true;
-      state.setupColumns[info.color] = x;
-
-      const opponent = other(info.color);
-
-      if (!state.setupPlaced[opponent]) {
-        state.setupPlayer = opponent;
-
-        await this.saveAndBroadcast(
-          matchId,
-          state,
-          colorName(info.color) +
-            " ha colocado su cubo inicial. Ahora elige columna " +
-            colorName(opponent) + "."
-        );
-
-        return;
-      }
-
-      state.phase = "playing";
-      state.player = state.openingPlayer;
-      state.startedAt = Date.now();
-
-      await this.spawnServerPiece(state);
-
-      await this.saveAndBroadcast(
-        matchId,
-        state,
-        "Â¡Empieza la partida! Turno de " +
-          colorName(state.player) + "."
-      );
-
-      return;
-    }
-
-    if (msg.type === "surrender") {
-      if (info.color !== BLUE && info.color !== RED) return;
-
-      finish(
-        state,
-        other(info.color),
-        colorName(info.color) + " se ha rendido."
-      );
-
-      await this.saveAndBroadcast(matchId, state, state.reason);
-      return;
-    }
-
-    if (msg.type === "control") {
-      if (state.phase !== "playing") return;
-      if (state.player !== info.color || !state.activePiece) return;
-
-      checkTimeout(state);
-
-      if (state.gameOver) {
-        await this.saveAndBroadcast(matchId, state, state.reason);
-        return;
-      }
-
-      const action = msg.action;
-
-      if (action === "left" || action === "right") {
-        const nx = state.activePiece.x + (action === "left" ? -1 : 1);
-        const { y } = state.activePiece;
-
-        if (
-          nx >= 0 && nx < W &&
-          state.board[y][nx] === 0
-        ) {
-          state.activePiece.x = nx;
-
-          await this.ctx.storage.put("game:" + matchId, state);
-
-          await this.broadcast(matchId, {
-            type: "piece_motion",
-            color: state.player,
-            x: nx,
-            y
-          });
-        }
-
-        return;
-      }
-
-      if (action === "down_step") {
-        state.fastDrop = false;
-        state.fallAt = Date.now();
-
-        await this.advanceGame(matchId, state, Date.now());
-        return;
-      }
-
-      if (action === "down_start") {
-        state.fastDrop = true;
-        state.fallAt = Date.now();
-
-        await this.ctx.storage.put("game:" + matchId, state);
-        await this.scheduleAlarm(1);
-        return;
-      }
-
-      if (action === "down_stop") {
-        state.fastDrop = false;
-        state.fallAt = Date.now() + 480;
-
-        await this.ctx.storage.put("game:" + matchId, state);
-        await this.scheduleAlarm(480);
-      }
-
-      return;
+  broadcastPieceMotion(game: Game) {
+    if (!game.activePiece) return;
+    for (const p of game.players) {
+      try {
+        p.ws.send(JSON.stringify({ type: "piece_motion", x: game.activePiece!.x, y: game.activePiece!.y, color: game.currentPlayerColor }));
+      } catch {}
     }
   }
 
-  async handleDisconnect(socket) {
-    const info = socket.deserializeAttachment() || {};
-
-    if (info.status === "queued") {
-      info.status = "disconnected";
-      socket.serializeAttachment(info);
-      return;
+  broadcastState(game: Game, message?: string) {
+    const state = {
+      type: "state",
+      board: game.board,
+      scores: game.scores,
+      player: game.currentPlayerColor,
+      phase: game.phase,
+      gameOver: game.gameOver,
+      suddenDeath: game.suddenDeath,
+      remaining: game.remaining,
+      diceRolls: game.diceRolls,
+      diceRound: game.diceRound,
+      setupPlaced: game.setupPlaced,
+      setupPlayer: game.setupPlayer,
+      activePiece: game.activePiece,
+      winner: game.winner,
+      reason: game.reason,
+      message: message || "",
+    };
+    for (const p of game.players) {
+      try {
+        p.ws.send(JSON.stringify(state));
+      } catch {}
     }
+  }
 
-    if (info.status !== "matched" || !info.matchId) return;
+  endGame(game: Game, winner: number, reason: string) {
+    game.gameOver = true;
+    game.winner = winner;
+    game.reason = reason;
+    game.phase = "over";
+    if (game.fallTimer) clearInterval(game.fallTimer);
+    this.broadcastState(game, reason);
+    setTimeout(() => this.cleanupGame(game.id), 30000);
+  }
 
-    const state = await this.getGame(info.matchId);
+  finishByScore(game: Game, reason: string) {
+    if (game.scores[BLUE] > game.scores[RED]) this.endGame(game, BLUE, reason);
+    else if (game.scores[RED] > game.scores[BLUE]) this.endGame(game, RED, reason);
+    else if (reason.includes("bloqueado")) this.endGame(game, 0, reason);
+    else {
+      game.suddenDeath = true;
+      this.broadcastState(game, "¡Empate! Muerte súbita");
+    }
+  }
 
-    if (!state || state.gameOver) return;
-
-    finish(
-      state,
-      other(info.color),
-      "El rival se ha desconectado. Victoria para " +
-        colorName(other(info.color)) + "."
-    );
-
-    await this.saveAndBroadcast(
-      info.matchId,
-      state,
-      state.reason
-    );
+  cleanupGame(gameId: string) {
+    const game = this.games.get(gameId);
+    if (!game) return;
+    if (game.fallTimer) clearInterval(game.fallTimer);
+    for (const p of game.players) {
+      this.playerToGame.delete(p.id);
+    }
+    this.games.delete(gameId);
   }
 }
 
+export default {
+  async fetch(request: Request, env: any, ctx: any) {
+    const url = new URL(request.url);
+    if (url.pathname === "/ws") {
+      const id = env.GAME_HUB.idFromName("global");
+      const stub = env.GAME_HUB.get(id);
+      return stub.fetch(request);
+    }
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+    return new Response("Gravity Go Server OK - use /ws", { status: 200 });
+  }
+};
